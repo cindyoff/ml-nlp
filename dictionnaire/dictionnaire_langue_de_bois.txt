@@ -1,0 +1,130 @@
+# DICTIONNAIRE DE LANGUE DE BOIS
+# Construit manuellement à partir de la lecture de 8 professions de foi (Archelec, 1981-1993)
+# Catégories : [VALEURS] [PROMESSES] [AUTO-LEGIT] [DRAMATISATION] [RUPTURE]
+
+# --- VALEURS ABSTRAITES ---
+avenir
+liberté
+égalité
+fraternité
+justice
+justice sociale
+solidarité
+progrès
+dignité
+paix
+espoir
+espérance
+unité
+union
+valeurs
+sens
+morale
+éthique
+humanité
+intérêt général
+bien commun
+communauté
+démocratie
+véritable démocratie
+vraie gauche
+vrai changement
+vrai progrès
+souffle nouveau
+chance
+réconciliation
+équilibre
+
+# --- PROMESSES VAGUES ---
+défendre
+protéger
+assurer
+garantir
+améliorer
+développer
+renforcer
+moderniser
+redresser
+construire
+bâtir
+lutter pour
+agir
+œuvrer
+mettre en œuvre
+répondre aux problèmes
+sortir de l'ornière
+relever le défi
+saisir les chances
+poursuivre les efforts
+aller de l'avant
+changer les choses
+faire bouger les choses
+
+# --- AUTO-LEGITIMATION ---
+expérience
+compétence
+efficacité
+dynamisme
+détermination
+engagement
+dévouement
+volonté
+conviction
+sincérité
+pondération
+générosité
+connaissance des problèmes
+fidèle à ses convictions
+a fait ses preuves
+vous me connaissez
+bien connu
+apprécié
+travaillé pour le pays
+défendu de toutes mes forces
+vous pouvez compter sur moi
+
+# --- DRAMATISATION ---
+crise sans précédent
+situation grave
+jamais depuis
+déclin
+ornière
+faillite
+désastre
+s'enfonce
+menace
+risque grave
+combat
+résistance
+urgence
+salut public
+redressement
+alternance
+
+# --- FAUSSE RUPTURE ---
+pas de discours des actes
+ne plus gémir agir
+concret réalisme efficacité
+nous ne faisons pas de promesse démagogique
+contrairement à
+nous savons
+nous connaissons
+nous voulons vraiment
+
+# --- FORMULES INCANTATOIRES ---
+ensemble
+pour tous
+au service de
+dans l'intérêt de
+pour notre pays
+pour nos enfants
+pour l'avenir de nos enfants
+vive la République
+vive la France
+le monde que nous laisserons à nos enfants
+redonner un sens
+réconcilier
+un souffle nouveau
+force d'avenir
+union forte et franche
+le sens de l'intérêt général
