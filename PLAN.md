@@ -6,10 +6,10 @@
 
 ## Dikra — Construction du dictionnaire
 
-- [ ] Lire manuellement une dizaine de professions de foi (URLs OCR dans le CSV) et noter les expressions langue de bois repérées à l'œil
-- [ ] Créer le fichier `dictionnaire/dictionnaire_langue_de_bois.txt` avec une expression/mot par ligne à partir des lectures
-- [ ] Télécharger la base Brysbaert, filtrer les mots très abstraits (score < 2) et les traduire en français avec Helsinki-NLP
-- [ ] Fusionner les deux sources pour obtenir le dictionnaire final
+- [X] Lire manuellement une dizaine de professions de foi (URLs OCR dans le CSV) et noter les expressions langue de bois repérées à l'œil
+- [X] Créer le fichier `dictionnaire/dictionnaire_langue_de_bois.txt` avec une expression/mot par ligne à partir des lectures
+- [X] Télécharger la base Brysbaert, filtrer les mots très abstraits (score < 2) et les traduire en français avec Helsinki-NLP
+- [X] Fusionner les deux sources pour obtenir le dictionnaire final
 
 ## Cindy — Scoring et analyse
 
