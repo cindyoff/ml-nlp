@@ -11,4 +11,3 @@ fastparquet
 tiktoken
 sentencepiece
 protobuf
-hashlib

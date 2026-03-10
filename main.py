@@ -23,11 +23,16 @@ def run_pipeline(steps=None):
                         "python", "-m", "pipeline.features_engineering",
                         "--input",      "outputs/sentences.parquet",
                         "--output",     "outputs/features.parquet",
-                    ], check=True)
+                    ], check=True), 
+        "labeling":     lambda: subprocess.run([
+                        "python", "-m", "pipeline.labeler",
+                        "--input",  "outputs/sentences.parquet",
+                        "--output", "outputs/scores.parquet",
+], check=True)
     }
 
     steps = steps or all_steps.keys()
 
     for step_name in steps:
-        logging.info(f"▶ Running step: {step_name}")
+        logging.info(f"Running step : {step_name}")
         all_steps[step_name]()

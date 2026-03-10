@@ -13,7 +13,7 @@ Usage :
 
 import argparse
 from pathlib import Path
-from config import BERT_MODEL, BATCH_SIZE, MAX_LENGTH 
+from pipeline.config import BERT_MODEL, BATCH_SIZE, MAX_LENGTH 
 import numpy as np
 import pandas as pd
 import torch

@@ -1,5 +1,5 @@
 import sqlite3
-from config import Path_Sciencespo
+from pipeline.config import Path_Sciencespo
 from arkindex_export import open_database, Element, Transcription, database
 from arkindex_export.queries import list_children
 from pathlib import Path
