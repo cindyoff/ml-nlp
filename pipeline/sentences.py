@@ -19,7 +19,7 @@ Usage :
 import re
 import argparse
 from pathlib import Path
-from config import ENCODING, NLTK_LANGUAGE 
+from pipeline.config import ENCODING, NLTK_LANGUAGE 
 import pandas as pd
 import nltk
 from nltk.tokenize import sent_tokenize

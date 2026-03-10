@@ -17,20 +17,21 @@ Usage :
 import re
 import argparse
 from pathlib import Path
-from config import SPACY_MODEL, SENTIMENT_MODEL
+from pipeline.config import SPACY_MODEL, SENTIMENT_MODEL, LANGUE_DE_BOIS
 import pandas as pd
 import spacy
 from transformers import pipeline as hf_pipeline
 
-# ── Lexique mots vagues (français) ──
-VAGUE_WORDS = {
-    "ensemble", "avenir", "futur", "progrès", "valeurs", "force", "espoir",
-    "engagement", "ambition", "volonté", "dynamique", "défi", "enjeu",
-    "cohésion", "solidarité", "confiance", "dialogue", "concertation",
-    "mobilisation", "responsabilité", "excellence", "innovation", "vision",
-    "transparence", "efficacité", "modernisation", "transformation",
-    "développement", "croissance", "équilibre", "harmonie", "bien-être",
-}
+# ── Lexique langue de bois (français) ──
+def compute_vague_words(sentence: str) -> dict:
+    words       = sentence.lower().split()
+    n_words     = max(len(words), 1)
+    vague_found = [w for w in words if w in LANGUE_DE_BOIS]
+
+    return {
+        "n_vague_words" : len(vague_found),
+        "vague_ratio"   : len(vague_found) / n_words,
+    }
 
 # ── Verbes modaux français ──
 MODAL_VERBS = {

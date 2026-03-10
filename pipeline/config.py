@@ -1,5 +1,5 @@
 from pathlib import Path
-from utils import load_lexicons
+from pipeline.utils import load_lexicons
 
 Path_Sciencespo = Path("data/sciencespo-archelec-20260217-121320.sqlite")
 
@@ -17,8 +17,6 @@ SPACY_MODEL       = "fr_core_news_md"
 SENTIMENT_MODEL   = "cmarkea/distilcamembert-base-sentiment"
 
 ############### LEXICONS              ##################
-VAGUE_WORDS = load_lexicons(
-    "data/lexicons/vague_words.txt",
-    "data/lexicons/langue_de_bois.txt"
+LANGUE_DE_BOIS = load_lexicons(
+    "dictionnaire/dictionnaire_final_clean.txt"
 )
-
