@@ -1,13 +1,14 @@
-# Dépendances du projet — Densité sémantique et langue de bois (Archelec)
-# Installation : pip install -r requirements.txt
-# Puis : python -m spacy download fr_core_news_sm
-
+arkindex-export==0.2.1
+tqdm==4.67.3
 pandas
 numpy
-transformers
-sentencepiece
-torch
+nltk
 spacy
-requests
-matplotlib
-seaborn
+torch
+transformers
+pyarrow
+fastparquet
+tiktoken
+sentencepiece
+protobuf
+hashlib
