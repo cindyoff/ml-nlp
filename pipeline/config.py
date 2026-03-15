@@ -24,8 +24,7 @@ SENTIMENT_MODEL   = "cmarkea/distilcamembert-base-sentiment"
 
 ############### LEXICONS              ##################
 VAGUE_WORDS = load_lexicons(
-    "data/lexicons/vague_words.txt",
-    "data/lexicons/langue_de_bois.txt"
+    "data/lexicons/dictionnaire_final_clean.txt"
 )
 
 MODAL_VERBS = load_lexicon("data/lexicons/modal_verbs.txt")
