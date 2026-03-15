@@ -1,5 +1,5 @@
 import sqlite3
-from pipeline.config import Path_Sciencespo
+from .config import Path_Sciencespo
 from arkindex_export import open_database, Element, Transcription, database
 from arkindex_export.queries import list_children
 from pathlib import Path
@@ -53,24 +53,25 @@ def extract_to_txt():
     ELECTIONS = ['legislatives', 'presidentielle']
     folder_id = {}
     for year in YEARS:
-        folder_id[year]= {}
-        for type in ELECTIONS:
-            # create the folder
-            year_folder = path_txt / year
-            year_folder.mkdir(exist_ok=True)
-            type_folder = year_folder / type
-            type_folder.mkdir(exist_ok=True)
+        folder_id[year] = {}
+        # ❌ Supprimez la création de dossiers ici
+
+    # Assignez d'abord les IDs
+    folder_id['1981']['legislatives'] = 'd51ea3db-68ee-4cc0-a87f-736ee17c5f87'
+    folder_id['1988']['legislatives'] = 'dfba9f5c-02de-478c-85c5-0ee780455433'
+    folder_id['1993']['legislatives'] = 'cf29300f-40bf-4b61-be93-6cb631be8fab'
+    folder_id['1988']['presidentielle'] = 'fd5bee0a-83e8-4bdc-aa48-52331af2e151'
+
+    # Créez uniquement les dossiers qui ont un ID
+    for year, types in folder_id.items():
+        for type, fid in types.items():
+            if fid:
+                type_folder = path_txt / year / type
+                type_folder.mkdir(parents=True, exist_ok=True)
 
     # compute some statistics
     print("Number of folders", Element.select().where(Element.type == 'folder').count())
     print("Number of pages:", Element.select().where(Element.type == 'page').count())
-
-
-    folder_id['1981']['legislatives'] = 'd51ea3db-68ee-4cc0-a87f-736ee17c5f87'
-    folder_id['1988']['legislatives'] = 'dfba9f5c-02de-478c-85c5-0ee780455433'
-    folder_id['1993']['legislatives'] = 'cf29300f-40bf-4b61-be93-6cb631be8fab'
-    #folder_id['1981']['presidentielle'] =  '4192aaa9-8485-433a-b0e3-559d2259e067'
-    folder_id['1988']['presidentielle'] = 'fd5bee0a-83e8-4bdc-aa48-52331af2e151'
 
     for year in YEARS:
         print ('year', year)
