@@ -15,47 +15,30 @@ Usage :
 """
 
 import re
+import os
 import argparse
 from pathlib import Path
-from pipeline.config import SPACY_MODEL, SENTIMENT_MODEL, LANGUE_DE_BOIS
+from concurrent.futures import ProcessPoolExecutor
+from .config import SPACY_MODEL, SENTIMENT_MODEL, VAGUE_WORDS, MODAL_VERBS
 import pandas as pd
 import spacy
+import torch
 from transformers import pipeline as hf_pipeline
 
-# ── Lexique langue de bois (français) ──
-def compute_vague_words(sentence: str) -> dict:
-    words       = sentence.lower().split()
-    n_words     = max(len(words), 1)
-    vague_found = [w for w in words if w in LANGUE_DE_BOIS]
-
-    return {
-        "n_vague_words" : len(vague_found),
-        "vague_ratio"   : len(vague_found) / n_words,
-    }
-
-# ── Verbes modaux français ──
-MODAL_VERBS = {
-    "devoir", "pouvoir", "vouloir", "falloir", "savoir",
-    "doi", "doit", "doivent", "devons", "devez", "devrait", "devraient",
-    "peut", "peuvent", "pouvons", "pourrait", "pourraient",
-    "faut", "faudrait",
-    "veux", "veut", "voulons", "voudrais", "voudrait",
-}
-
 # ── Patterns regex ──
-PATTERN_DIGIT       = re.compile(r'\d+')
-PATTERN_DATE        = re.compile(
-    r'\b(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})'           # 01/01/2020
+PATTERN_DIGIT   = re.compile(r'\d+')
+PATTERN_DATE    = re.compile(
+    r'\b(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})'
     r'|\b(janvier|février|mars|avril|mai|juin|juillet|août'
-    r'|septembre|octobre|novembre|décembre)\s+\d{4}\b'       # janvier 2020
-    r'|\b\d{4}\b',                                           # 2020
+    r'|septembre|octobre|novembre|décembre)\s+\d{4}\b'
+    r'|\b\d{4}\b',
     re.IGNORECASE
 )
-PATTERN_MONEY       = re.compile(
+PATTERN_MONEY   = re.compile(
     r'\b\d+[\s]?(?:€|euros?|milliards?|millions?|milliard|million)\b',
     re.IGNORECASE
 )
-PATTERN_PERCENT     = re.compile(r'\d+[\.,]?\d*\s*%')
+PATTERN_PERCENT = re.compile(r'\d+[\.,]?\d*\s*%')
 
 
 # ──────────────────────────────────────────────
@@ -63,19 +46,19 @@ PATTERN_PERCENT     = re.compile(r'\d+[\.,]?\d*\s*%')
 # ──────────────────────────────────────────────
 
 def compute_concreteness(sentence: str) -> dict:
-    words       = sentence.split()
-    n_words     = max(len(words), 1)
-    digits      = PATTERN_DIGIT.findall(sentence)
-    dates       = PATTERN_DATE.findall(sentence)
-    money       = PATTERN_MONEY.findall(sentence)
-    percents    = PATTERN_PERCENT.findall(sentence)
+    words    = sentence.split()
+    n_words  = max(len(words), 1)
+    digits   = PATTERN_DIGIT.findall(sentence)
+    dates    = PATTERN_DATE.findall(sentence)
+    money    = PATTERN_MONEY.findall(sentence)
+    percents = PATTERN_PERCENT.findall(sentence)
 
     return {
-        "n_digits"         : len(digits),
-        "n_dates"          : len([d for d in dates if any(d)]),
-        "n_money"          : len(money),
-        "n_percent"        : len(percents),
-        "numeric_ratio"    : len(digits) / n_words,
+        "n_digits"      : len(digits),
+        "n_dates"       : len([d for d in dates if any(d)]),
+        "n_money"       : len(money),
+        "n_percent"     : len(percents),
+        "numeric_ratio" : len(digits) / n_words,
     }
 
 
@@ -89,8 +72,8 @@ def compute_vague_words(sentence: str) -> dict:
     vague_found = [w for w in words if w in VAGUE_WORDS]
 
     return {
-        "n_vague_words"    : len(vague_found),
-        "vague_ratio"      : len(vague_found) / n_words,
+        "n_vague_words" : len(vague_found),
+        "vague_ratio"   : len(vague_found) / n_words,
     }
 
 
@@ -104,8 +87,8 @@ def compute_modal_verbs(sentence: str) -> dict:
     modals_found = [w for w in words if w in MODAL_VERBS]
 
     return {
-        "n_modal_verbs"    : len(modals_found),
-        "modal_ratio"      : len(modals_found) / n_words,
+        "n_modal_verbs" : len(modals_found),
+        "modal_ratio"   : len(modals_found) / n_words,
     }
 
 
@@ -121,10 +104,10 @@ def compute_named_entities(doc) -> dict:
     n_total = len(doc.ents)
 
     return {
-        "n_ent_org"        : n_org,
-        "n_ent_loc"        : n_loc,
-        "n_ent_law"        : n_law,
-        "n_ent_total"      : n_total,
+        "n_ent_org"   : n_org,
+        "n_ent_loc"   : n_loc,
+        "n_ent_law"   : n_law,
+        "n_ent_total" : n_total,
     }
 
 
@@ -134,13 +117,15 @@ def compute_named_entities(doc) -> dict:
 
 class SentimentScorer:
     def __init__(self, model_name: str = SENTIMENT_MODEL):
-        print(f"🔄 Chargement du modèle sentiment '{model_name}'...")
+        device = "mps" if torch.backends.mps.is_available() else "cpu"
+        print(f"🔄 Chargement du modèle sentiment '{model_name}' sur {device}...")
         self.pipe = hf_pipeline(
             "text-classification",
             model=model_name,
-            top_k=None,           # retourne tous les scores
+            top_k=None,
             truncation=True,
             max_length=128,
+            device=device,
         )
         print("✅ Modèle sentiment chargé.\n")
 
@@ -148,17 +133,27 @@ class SentimentScorer:
         results = self.pipe(sentences)
         output  = []
         for res in results:
-            scores = {r["label"].lower(): r["score"] for r in res}
-            # Intensité = distance à la neutralité
-            positive   = scores.get("positive", scores.get("5 stars", 0.0))
-            negative   = scores.get("negative", scores.get("1 star",  0.0))
-            intensity  = abs(positive - negative)
+            scores   = {r["label"].lower(): r["score"] for r in res}
+            positive = scores.get("positive", scores.get("5 stars", 0.0))
+            negative = scores.get("negative", scores.get("1 star",  0.0))
             output.append({
-                "sentiment_positive"   : positive,
-                "sentiment_negative"   : negative,
-                "sentiment_intensity"  : intensity,
+                "sentiment_positive"  : positive,
+                "sentiment_negative"  : negative,
+                "sentiment_intensity" : abs(positive - negative),
             })
         return output
+
+
+# ──────────────────────────────────────────────
+# HELPER MULTIPROCESSING (doit être au niveau module pour être picklable)
+# ──────────────────────────────────────────────
+
+def _compute_rule_features(sentence: str) -> dict:
+    result = {}
+    result.update(compute_concreteness(sentence))
+    result.update(compute_vague_words(sentence))
+    result.update(compute_modal_verbs(sentence))
+    return result
 
 
 # ──────────────────────────────────────────────
@@ -168,29 +163,28 @@ class SentimentScorer:
 def build_features(df: pd.DataFrame) -> pd.DataFrame:
     sentences = df["sentence"].tolist()
 
-    # ── spaCy ──
+    # ── spaCy : NER uniquement (désactive parser, morphologizer, etc.) ──
     print("🔄 Chargement de spaCy...")
     try:
         nlp = spacy.load(SPACY_MODEL)
+        nlp.select_pipes(enable=["ner"])
     except OSError:
         raise OSError(
             f"Modèle spaCy '{SPACY_MODEL}' introuvable.\n"
             f"Installez-le avec : python -m spacy download {SPACY_MODEL}"
         )
-    print("✅ spaCy chargé.\n")
+    print("✅ spaCy chargé (mode NER uniquement).\n")
 
     # ── Sentiment ──
     scorer = SentimentScorer()
 
-    # ── Calcul des features ──
-    all_features = []
     print("⚙️  Calcul des features...\n")
 
-    # NER en batch avec spaCy (plus rapide)
-    docs = list(nlp.pipe(sentences, batch_size=64))
+    # NER en batch avec spaCy
+    docs = list(nlp.pipe(sentences, batch_size=256))
 
-    # Sentiment en batch
-    SENT_BATCH = 64
+    # Sentiment en batch (MPS si disponible, batch 256)
+    SENT_BATCH = 256
     sentiment_scores = []
     for i in range(0, len(sentences), SENT_BATCH):
         batch = sentences[i : i + SENT_BATCH]
@@ -198,28 +192,23 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
         print(f"  Sentiment : {min(i + SENT_BATCH, len(sentences))}/{len(sentences)}", end="\r")
     print()
 
-    for i, (sentence, doc) in enumerate(zip(sentences, docs)):
+    # Features réglementaires en parallèle (CPU-bound)
+    n_workers = min(os.cpu_count() or 1, 8)
+    print(f"  Features règlementaires : multiprocessing ({n_workers} workers)...")
+    with ProcessPoolExecutor(max_workers=n_workers) as executor:
+        rule_features = list(executor.map(_compute_rule_features, sentences, chunksize=512))
+    print()
+
+    # ── Assemblage ──
+    all_features = []
+    for doc, sent_score, rule_feat in zip(docs, sentiment_scores, rule_features):
         features = {}
-        features.update(compute_concreteness(sentence))
-        features.update(compute_vague_words(sentence))
-        features.update(compute_modal_verbs(sentence))
+        features.update(rule_feat)
         features.update(compute_named_entities(doc))
-        features.update(sentiment_scores[i])
+        features.update(sent_score)
         all_features.append(features)
 
     df_features = pd.DataFrame(all_features)
-
-    # ── Concreteness score global (combinaison des sous-features) ──
-    df_features["concreteness_score"] = (
-        df_features["n_digits"]
-        + df_features["n_dates"] * 2
-        + df_features["n_money"] * 3
-        + df_features["n_percent"] * 2
-        + df_features["n_ent_org"]
-        + df_features["n_ent_loc"]
-        + df_features["n_ent_law"] * 2
-    )
-
     return pd.concat([df.reset_index(drop=True), df_features], axis=1)
 
 
