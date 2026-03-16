@@ -32,7 +32,10 @@ class BertEmbedder:
 
         print(f"🔄 Chargement du modèle '{model_name}'...")
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        self.model = AutoModel.from_pretrained(model_name).half().to(self.device)  # fp16
+        model = AutoModel.from_pretrained(model_name)
+        if self.device.type == "cuda":
+            model = model.half()  # fp16 only on GPU
+        self.model = model.to(self.device)
         self.model.eval()
         print("✅ Modèle chargé.\n")
 

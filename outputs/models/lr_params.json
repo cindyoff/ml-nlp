@@ -1,0 +1,72 @@
+{
+  "model": "LogisticRegression",
+  "iv_threshold": 0.02,
+  "significance_alpha": 0.05,
+  "features_after_iv": [
+    "n_digits",
+    "filter_ratio",
+    "numeric_ratio",
+    "sentiment_intensity",
+    "n_ent_total",
+    "sentiment_positive",
+    "sentiment_negative",
+    "n_ent_loc",
+    "vague_ratio",
+    "n_ent_org",
+    "modal_ratio"
+  ],
+  "features_selected": [
+    "n_digits",
+    "sentiment_positive",
+    "sentiment_negative"
+  ],
+  "threshold": 0.32025125628140705,
+  "iv_scores": {
+    "n_digits": 0.3411508913308867,
+    "filter_ratio": 0.1796245109495671,
+    "numeric_ratio": 0.15002915479389278,
+    "sentiment_intensity": 0.13587881980710664,
+    "n_ent_total": 0.13308632439317444,
+    "sentiment_positive": 0.11237941537359528,
+    "sentiment_negative": 0.10846444174694182,
+    "n_ent_loc": 0.09194124145538318,
+    "vague_ratio": 0.06731444877529587,
+    "n_ent_org": 0.0370793734932306,
+    "modal_ratio": 0.022486415489201297,
+    "n_modal_verbs": 0.011735948040303087,
+    "n_vague_words": 0.007835726172715414,
+    "n_money": 0.0,
+    "n_percent": 0.0,
+    "n_dates": 0.0,
+    "n_ent_law": 0.0
+  },
+  "p_values": {
+    "n_digits": 0.0023952479586163617,
+    "filter_ratio": 0.27246519842691397,
+    "numeric_ratio": 0.7187954740380643,
+    "sentiment_intensity": 0.17238646000342384,
+    "n_ent_total": 0.8469064406852247,
+    "sentiment_positive": 0.02174001163523505,
+    "sentiment_negative": 0.009541495638428025,
+    "n_ent_loc": 0.5660462201027702,
+    "vague_ratio": 0.08493090719432392,
+    "n_ent_org": 0.22525835138089878,
+    "modal_ratio": 0.4737005319835649
+  },
+  "lr_params": {
+    "C": 1.0,
+    "class_weight": "balanced",
+    "dual": false,
+    "fit_intercept": true,
+    "intercept_scaling": 1,
+    "l1_ratio": 0.0,
+    "max_iter": 500,
+    "n_jobs": null,
+    "penalty": "deprecated",
+    "random_state": 42,
+    "solver": "lbfgs",
+    "tol": 0.0001,
+    "verbose": 0,
+    "warm_start": false
+  }
+}
