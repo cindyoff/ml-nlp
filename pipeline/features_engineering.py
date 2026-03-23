@@ -1,17 +1,10 @@
 """
-features_engineering.py
-========================
-Charge le parquet de phrases et ajoute des features linguistiques :
-  1. Concreteness score  (chiffres, dates, montants, % numériques)
+Chargement du parquet de phrases et ajoute des features linguistiques :
+  1. Concreteness score  (chiffres, dates, montants, pourcentages)
   2. Vague words         (lexique de mots vagues)
   3. Modal verbs         (verbes modaux français)
   4. Named entities      (organisations, lieux, lois via spaCy)
   5. Sentiment intensity (via transformers camembert-sentiment)
-
-Usage :
-    python -m pipeline.features_engineering \
-        --input  outputs/sentences.parquet \
-        --output outputs/features.parquet
 """
 
 import re
@@ -25,7 +18,7 @@ import spacy
 import torch
 from transformers import pipeline as hf_pipeline
 
-# ── Patterns regex ──
+# pattern regex
 PATTERN_DIGIT   = re.compile(r'\d+')
 PATTERN_DATE    = re.compile(
     r'\b(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})'
@@ -40,11 +33,7 @@ PATTERN_MONEY   = re.compile(
 )
 PATTERN_PERCENT = re.compile(r'\d+[\.,]?\d*\s*%')
 
-
-# ──────────────────────────────────────────────
-# 1. CONCRETENESS SCORE
-# ──────────────────────────────────────────────
-
+# concreteness score
 def compute_concreteness(sentence: str) -> dict:
     words    = sentence.split()
     n_words  = max(len(words), 1)
@@ -61,11 +50,7 @@ def compute_concreteness(sentence: str) -> dict:
         "numeric_ratio" : len(digits) / n_words,
     }
 
-
-# ──────────────────────────────────────────────
-# 2. VAGUE WORDS
-# ──────────────────────────────────────────────
-
+# mots vagues
 def compute_vague_words(sentence: str) -> dict:
     words       = sentence.lower().split()
     n_words     = max(len(words), 1)
@@ -76,11 +61,7 @@ def compute_vague_words(sentence: str) -> dict:
         "vague_ratio"   : len(vague_found) / n_words,
     }
 
-
-# ──────────────────────────────────────────────
-# 3. MODAL VERBS
-# ──────────────────────────────────────────────
-
+# modal verbs
 def compute_modal_verbs(sentence: str) -> dict:
     words        = sentence.lower().split()
     n_words      = max(len(words), 1)
@@ -91,13 +72,9 @@ def compute_modal_verbs(sentence: str) -> dict:
         "modal_ratio"   : len(modals_found) / n_words,
     }
 
-
-# ──────────────────────────────────────────────
-# 4. NAMED ENTITIES (spaCy)
-# ──────────────────────────────────────────────
-
+# named entities
 def compute_named_entities(doc) -> dict:
-    """Reçoit un doc spaCy déjà parsé."""
+    """Usage de spaCy ici"""
     n_org   = sum(1 for ent in doc.ents if ent.label_ == "ORG")
     n_loc   = sum(1 for ent in doc.ents if ent.label_ in ("LOC", "GPE"))
     n_law   = sum(1 for ent in doc.ents if ent.label_ == "LAW")
@@ -110,11 +87,7 @@ def compute_named_entities(doc) -> dict:
         "n_ent_total" : n_total,
     }
 
-
-# ──────────────────────────────────────────────
-# 5. SENTIMENT INTENSITY
-# ──────────────────────────────────────────────
-
+# sentiment analysis
 class SentimentScorer:
     def __init__(self, model_name: str = SENTIMENT_MODEL):
         device = "mps" if torch.backends.mps.is_available() else "cpu"
@@ -127,7 +100,7 @@ class SentimentScorer:
             max_length=128,
             device=device,
         )
-        print("✅ Modèle sentiment chargé.\n")
+        print("Modèle sentiment chargé\n")
 
     def score_batch(self, sentences: list[str]) -> list[dict]:
         results = self.pipe(sentences)
@@ -143,11 +116,7 @@ class SentimentScorer:
             })
         return output
 
-
-# ──────────────────────────────────────────────
-# HELPER MULTIPROCESSING (doit être au niveau module pour être picklable)
-# ──────────────────────────────────────────────
-
+# helper multiprocessing
 def _compute_rule_features(sentence: str) -> dict:
     result = {}
     result.update(compute_concreteness(sentence))
@@ -155,35 +124,31 @@ def _compute_rule_features(sentence: str) -> dict:
     result.update(compute_modal_verbs(sentence))
     return result
 
-
-# ──────────────────────────────────────────────
-# PIPELINE COMPLET
-# ──────────────────────────────────────────────
-
+# pipeline complet
 def build_features(df: pd.DataFrame) -> pd.DataFrame:
     sentences = df["sentence"].tolist()
 
-    # ── spaCy : NER uniquement (désactive parser, morphologizer, etc.) ──
-    print("🔄 Chargement de spaCy...")
+    # spaCy NER
+    print("Chargement de spaCy")
     try:
         nlp = spacy.load(SPACY_MODEL)
         nlp.select_pipes(enable=["ner"])
     except OSError:
         raise OSError(
-            f"Modèle spaCy '{SPACY_MODEL}' introuvable.\n"
-            f"Installez-le avec : python -m spacy download {SPACY_MODEL}"
+            f"Modèle spaCy '{SPACY_MODEL}' introuvable\n"
+            # f"Installez-le avec : python -m spacy download {SPACY_MODEL}"
         )
-    print("✅ spaCy chargé (mode NER uniquement).\n")
+    print("spaCy chargé (mode NER uniquement)\n")
 
-    # ── Sentiment ──
+    # sentiment
     scorer = SentimentScorer()
 
-    print("⚙️  Calcul des features...\n")
+    print("Calcul des features...\n")
 
-    # NER en batch avec spaCy
+    # NER
     docs = list(nlp.pipe(sentences, batch_size=256))
 
-    # Sentiment en batch (MPS si disponible, batch 256)
+    # sentiment batch
     SENT_BATCH = 256
     sentiment_scores = []
     for i in range(0, len(sentences), SENT_BATCH):
@@ -192,9 +157,9 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
         print(f"  Sentiment : {min(i + SENT_BATCH, len(sentences))}/{len(sentences)}", end="\r")
     print()
 
-    # Features réglementaires en parallèle (CPU-bound)
+    # features réglementaires
     n_workers = min(os.cpu_count() or 1, 8)
-    print(f"  Features règlementaires : multiprocessing ({n_workers} workers)...")
+    print(f"Features règlementaires : multiprocessing ({n_workers} workers)...")
     with ProcessPoolExecutor(max_workers=n_workers) as executor:
         rule_features = list(executor.map(_compute_rule_features, sentences, chunksize=512))
     print()
@@ -211,18 +176,13 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
     df_features = pd.DataFrame(all_features)
     return pd.concat([df.reset_index(drop=True), df_features], axis=1)
 
-
-# ──────────────────────────────────────────────
-# MAIN
-# ──────────────────────────────────────────────
-
 def main():
     parser = argparse.ArgumentParser(description="Feature engineering pour la détection de langue de bois")
     parser.add_argument("--input",  required=True,                      help="Parquet d'entrée (ex: outputs/sentences.parquet)")
     parser.add_argument("--output", default="outputs/features.parquet", help="Parquet de sortie")
     args = parser.parse_args()
 
-    print(f"\n📂 Chargement de : {args.input}")
+    print(f"\nChargement de : {args.input}")
     df = pd.read_parquet(args.input)
     print(f"   {len(df)} phrases chargées\n")
 
@@ -233,9 +193,9 @@ def main():
     df_final.to_parquet(output_path, index=False)
 
     feature_cols = [c for c in df_final.columns if c not in df.columns]
-    print(f"\n💾 Parquet sauvegardé → {output_path}")
-    print(f"   Shape : {df_final.shape}")
-    print(f"   {len(feature_cols)} nouvelles features : {feature_cols}\n")
+    print(f"\nParquet sauvegardé → {output_path}")
+    print(f"Shape : {df_final.shape}")
+    print(f"{len(feature_cols)} nouvelles features : {feature_cols}\n")
 
 
 if __name__ == "__main__":
