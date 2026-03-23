@@ -1,12 +1,10 @@
 """
-tests/test_labeler.py
-=====================
 Tests unitaires pour pipeline/labeler.py :
-  - apply_labels happy path
-  - label invalide → ValueError
-  - colonne PRIMARY_KEY absente dans CSV → ValueError
-  - fichier _2class bien créé
-  - phrases sans label → NaN conservé
+  - apply_labels path
+  - label invalide : ValueError
+  - colonne PRIMARY_KEY absente dans CSV : ValueError
+  - fichier 2 classes bien crée
+  - phrases sans label : NaN conservé
 """
 
 import numpy as np
@@ -44,7 +42,7 @@ def _make_csv(tmp_path, labels: dict) -> Path:
 
 class TestApplyLabels:
     def test_happy_path(self, tmp_path):
-        """Labels bien appliqués sur les PRIMARY_KEY correspondantes."""
+        """Labels bien appliqués sur les PRIMARY_KEY correspondantes"""
         parquet = _make_parquet(tmp_path, n=10)
         csv     = _make_csv(tmp_path, {
             "doc_0_0": "langue_de_bois",
@@ -59,7 +57,7 @@ class TestApplyLabels:
         assert df.loc[df["PRIMARY_KEY"] == "doc_0_1", "label"].iloc[0] == "non_langue_de_bois"
 
     def test_unlabeled_rows_are_nan(self, tmp_path):
-        """Les phrases sans label doivent avoir NaN dans la colonne label."""
+        """Phrases sans label doivent avoir NaN dans la colonne nommée label"""
         parquet = _make_parquet(tmp_path, n=10)
         csv     = _make_csv(tmp_path, {"doc_0_0": "langue_de_bois"})
         out = tmp_path / "final_labeled.parquet"
@@ -70,7 +68,7 @@ class TestApplyLabels:
         assert unlabeled.isna().all()
 
     def test_invalid_label_raises(self, tmp_path):
-        """Un label inconnu doit lever ValueError."""
+        """Label inconnu lève ValueError"""
         parquet = _make_parquet(tmp_path, n=5)
         csv     = _make_csv(tmp_path, {"doc_0_0": "INCONNU"})
         out = tmp_path / "final_labeled.parquet"
@@ -78,7 +76,7 @@ class TestApplyLabels:
             apply_labels(str(csv), str(parquet), str(out))
 
     def test_missing_primary_key_col_in_csv(self, tmp_path):
-        """CSV sans colonne PRIMARY_KEY → ValueError."""
+        """CSV sans colonne PRIMARY_KEY : ValueError"""
         parquet = _make_parquet(tmp_path, n=5)
         bad_csv = tmp_path / "bad.csv"
         pd.DataFrame({"id": ["x"], "label": ["langue_de_bois"]}).to_csv(bad_csv, index=False)
@@ -87,7 +85,7 @@ class TestApplyLabels:
             apply_labels(str(bad_csv), str(parquet), str(out))
 
     def test_produces_2class_file(self, tmp_path):
-        """Le fichier _2class est créé en parallèle du fichier principal."""
+        """Le fichier 2 classes est créé en parallèle du fichier principal"""
         parquet = _make_parquet(tmp_path, n=10)
         csv     = _make_csv(tmp_path, {
             "doc_0_0": "langue_de_bois",
@@ -100,7 +98,7 @@ class TestApplyLabels:
         assert out_2class.exists()
 
     def test_2class_excludes_autre(self, tmp_path):
-        """Le fichier _2class ne contient pas les phrases labellisées 'autre'."""
+        """Le fichier 2 classes ne contient pas les phrases labellisées comme autre"""
         parquet = _make_parquet(tmp_path, n=10)
         csv     = _make_csv(tmp_path, {
             "doc_0_0": "langue_de_bois",
@@ -114,7 +112,7 @@ class TestApplyLabels:
         assert "autre" not in df_2class["label"].dropna().values
 
     def test_csv_not_found_raises(self, tmp_path):
-        """CSV introuvable → FileNotFoundError."""
+        """CSV introuvable : FileNotFoundError"""
         parquet = _make_parquet(tmp_path, n=5)
         with pytest.raises(FileNotFoundError):
             apply_labels(str(tmp_path / "missing.csv"), str(parquet), str(tmp_path / "out.parquet"))
