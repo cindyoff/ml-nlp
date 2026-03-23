@@ -1,9 +1,6 @@
 # Pipeline NLP — Détection de la langue de bois (1981–1993)
 
-Analyse automatique de la "langue de bois" dans les discours de campagne électorale française.
-La pipeline extrait les transcriptions d'une base Arkindex, segmente les textes en phrases,
-calcule des embeddings CamemBERT et des features linguistiques, entraîne des classifieurs
-supervisés, puis visualise les résultats via deux dashboards interactifs.
+Analyse de la "langue de bois" dans les discours de campagne électorale française.
 
 **Auteurs :**
 - Ben Belgacem Dikra (dikrabenbelgacem)
@@ -31,56 +28,73 @@ Source : export SQLite Arkindex (`data/sciencespo-archelec-20260217-121320.sqlit
 
 ```
 ml-nlp/
-├── main.py                          # Orchestrateur de la pipeline
-├── dashboard.py                     # Visualisation des prédictions par document
-├── statistique_resume.py            # Dashboard résumé statistique des modèles
-├── sample_annotation.py             # Génération du CSV d'annotation (one-shot)
+├── main.py                                         # Cindy Tran
+├── dashboard.py                                    # Cindy Tran
+├── statistique_resume.py                           # Cindy Tran
+├── sample_annotation.py                            # Cindy Tran             
 ├── requirements.txt
+├── annotate.py                                     # Cindy Tran
+├── setup.py                                        # Cindy Tran
 │
 ├── pipeline/
-│   ├── config.py                    # Paramètres globaux (modèles, chemins, lexiques)
-│   ├── utils.py                     # Chargement des lexiques
-│   ├── extract_text.py              # Extraction SQLite → fichiers .txt
-│   ├── sentences.py                 # Segmentation en phrases → sentences.parquet
-│   ├── embedder.py                  # Embeddings CamemBERT → embeddings.parquet
-│   ├── features_engineering.py      # Features linguistiques → features.parquet
-│   ├── merger.py                    # Fusion embeddings + features → final.parquet
-│   ├── labeler.py                   # Application des labels CSV → final_labeled.parquet
-│   └── modelisation.py              # Entraînement LR + XGBoost → outputs/models/
+│   ├── __init__.py                                 # Cindy Tran  
+│   ├── config.py                                   # Cindy Tran
+│   ├── utils.py                                    # Cindy Tran
+│   ├── extract_text.py                             # Cindy Tran
+│   ├── sentences.py                                # Cindy Tran
+│   ├── embedder.py                                 # Cindy Tran
+│   ├── features_engineering.py                     # Cindy Tran
+│   ├── merger.py                                   # Cindy Tran
+│   ├── labeler.py                                  # Cindy Tran
+│   └── modelisation.py                             # Cindy Tran
+│
+├── dictionnaire/
+│   ├── dictionnaire_final_clean.txt                # Dikra Ben Belgacem
+│   └── dictionnaire_langue_de_bois.txt             # Dikra Ben Belgacem
+│
+├── notebooks/
+│   ├── analyse_langue_de_bois.ipynb                # Dikra Ben Belgacem
 │
 ├── data/
-│   ├── sciencespo-archelec-*.sqlite # Base Arkindex (12 Go)
-│   ├── text_files/                  # Transcriptions extraites
+│   ├── archelec_search.csv
+│   ├── text_files/
 │   │   ├── 1981/legislatives/*.txt
 │   │   ├── 1988/legislatives/*.txt
 │   │   ├── 1988/presidentielle/*.txt
 │   │   └── 1993/legislatives/*.txt
 │   ├── labels/
-│   │   └── annotation_sample.csv    # ~1 100 phrases annotées manuellement (source de vérité)
+│   │   └── annotation_sample.csv                    # Cindy Tran
 │   └── lexicons/
-│       ├── vague_words.txt          # Mots vagues abstraits (31 termes)
-│       ├── modal_verbs.txt          # Verbes modaux français (24 entrées)
-│       └── langue_de_bois.txt       # Lexique complémentaire (à enrichir)
+│       ├── dictionnaire_final_clean.txt             # Dikra Ben Belgacem
+│       └── modal_verbs.txt                          # Cindy Tran
+│
+├── tests/
+│   ├── __init__.py                                  # Cindy Tran
+│   ├── test_extract.py                              # Cindy Tran
+│   ├── test_labeler.py                              # Cindy Tran
+│   ├── test_merger.py                               # Cindy Tran
+│   ├── test_modelisation.py                         # Cindy Tran
+│   └── test_sentences.py                            # Cindy Tran
 │
 └── outputs/
-    ├── sentences.parquet            # Phrases segmentées (≤ 110 000)
-    ├── embeddings.parquet           # Vecteurs CamemBERT (768 dims, float32)
-    ├── features.parquet             # Features linguistiques (17 colonnes)
-    ├── final.parquet                # Fusion embeddings + features
-    ├── final_labeled.parquet        # Données avec colonne "label"
-    ├── final_labeled_2class.parquet # Idem, restreint aux 2 classes annotées
-    ├── final_predicted.parquet      # Corpus complet avec prédictions LR + XGBoost
+    ├── sentences.parquet            
+    ├── embeddings.parquet
+    ├── features.parquet            
+    ├── final.parquet         
+    ├── final_labeled.parquet      
+    ├── final_labeled_2class.parquet 
+    ├── final_predicted.parquet      
     └── models/
-        ├── lr_estimator.joblib      # Pipeline sklearn (StandardScaler + LogisticRegression)
-        ├── xgb_estimator.joblib     # Modèle XGBClassifier (meilleurs hyperparamètres)
-        ├── lr_params.json           # Features sélectionnées, IV, p-values, seuil
-        ├── xgb_params.json          # Hyperparamètres, AUC CV, seuil
-        └── evaluation.json          # Métriques train / val / test (LR + XGBoost)
+        ├── lr_estimator.joblib     
+        ├── xgb_estimator.joblib    
+        ├── lr_params.json           
+        ├── xgb_params.json         
+        └── evaluation.json          
 ```
 
 ---
 
-## Installation
+## Installation des packages
 
 ```bash
 python -m venv venv
@@ -100,9 +114,7 @@ python -c "import nltk; nltk.download('punkt'); nltk.download('punkt_tab')"
 
 ### Objectif
 
-Détecter automatiquement la "langue de bois" dans des discours de campagne électorale française
-(1981–1993). La langue de bois désigne un style rhétorique caractérisé par l'usage de formules
-vagues, de verbes modaux, d'abstractions et d'un faible ancrage factuel.
+Détecter la présence de "langue de bois" dans des discours de campagne électorale française pour des élections législatives et présidentielles (1981–1993).
 
 ### Approche
 
@@ -141,7 +153,7 @@ outputs/final_labeled.parquet
 outputs/final_3class_labeled.parquet
 ```
 
-L'objectif est de comparer les deux classifieurs en fin de projet : le mode `filtered` ignore le bruit en amont, le mode `three_class` apprend à le reconnaître comme une classe à part entière.
+L'objectif est de comparer les deux classifieurs en fin de projet : le mode `filtered` ignore le bruit en amont, le mode `three_class` apprend à le reconnaître comme une classe à part entière. Ici, on se focalise sur le mode 2 classes. 
 
 ### Choix techniques notables
 
@@ -219,20 +231,17 @@ embeddings.parquet           features.parquet
 > `embeddings` et `features_engineering` sont **indépendantes** — elles lisent toutes
 > les deux `sentences.parquet` sans dépendance entre elles.
 
-### Lancer la pipeline complète
+### Lancement de la pipeline complète
 
 ```bash
-# Mode filtré (défaut, 2 classes)
+# Mode 2 classes
 python main.py
 
-# Mode trois classes (rien filtré, annoter "autre" manuellement)
-python main.py --mode three_class
-```
+# Complet
+python main.py --steps sentences embedding features_engineering merger label modelise statistique_resume
 
-### Lancer des étapes spécifiques
-
-```bash
-python main.py --steps sentences embeddings features_engineering merger label modelise
+# Lancement du second dashboard
+streamlit run dashboard.py
 ```
 
 Étapes disponibles (dans l'ordre) :
@@ -260,7 +269,7 @@ filtrage moyen** (proportion de lignes supprimées par document) et un résumé 
   [1981/legislatives] 3182 fichier(s) — ratio filtré moy 38.4%  (min 12.0% / max 91.2%)
   [1988/legislatives] 3628 fichier(s) — ratio filtré moy 41.1%  (min 9.3% / max 95.0%)
   ...
-✅ 110000 phrases extraites depuis 8240 documents
+ 110000 phrases extraites depuis 8240 documents
    Ratio de filtrage moyen : 39.8%  (1 240 documents avec > 50% de lignes filtrées)
 ```
 
