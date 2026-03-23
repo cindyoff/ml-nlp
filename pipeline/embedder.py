@@ -1,14 +1,8 @@
 """
-embedder.py
-===========
-Charge le parquet de phrases, encode chaque phrase avec CamemBERT
-et sauvegarde un nouveau parquet où :
+Chargement du parquet de phrases et encode chaque phrase avec CamemBERT et sauvegarde un nouveau parquet où :
   - chaque ligne est une phrase
-  - la colonne 'embedding' contient le vecteur float32 de 768 dimensions
+  - la colonne 'embedding' contient le vecteur float
   - les colonnes PRIMARY_KEY, doc_id, date, classe relient chaque phrase à sa source
-
-Usage :
-    python -m pipeline.embedder --input outputs/sentences.parquet --output outputs/embeddings.parquet
 """
 
 import argparse
@@ -21,23 +15,21 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from transformers import AutoTokenizer, AutoModel
 
-# ──────────────────────────────────────────────
-# CLASSE ENCODEUR
-# ──────────────────────────────────────────────
 
+# encoder
 class BertEmbedder:
     def __init__(self, model_name: str = BERT_MODEL):
         self.device = self._get_device()
-        print(f"🖥  Appareil utilisé : {self.device}")
+        print(f"Appareil utilisé : {self.device}")
 
-        print(f"🔄 Chargement du modèle '{model_name}'...")
+        print(f"Chargement du modèle '{model_name}'")
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         model = AutoModel.from_pretrained(model_name)
         if self.device.type == "cuda":
             model = model.half()  # fp16 only on GPU
         self.model = model.to(self.device)
         self.model.eval()
-        print("✅ Modèle chargé.\n")
+        print("Modèle chargé\n")
 
     def encode(self, sentences: list[str], batch_size: int = BATCH_SIZE) -> np.ndarray:
         all_embeddings = []
@@ -56,7 +48,7 @@ class BertEmbedder:
             with torch.no_grad():
                 output = self.model(**encoded)
 
-            # Mean pooling sur les tokens non-padding (meilleur que CLS pour sentence-level)
+            # Mean pooling sur les tokens non-padding
             token_embeddings = output.last_hidden_state.float()
             attention_mask = encoded["attention_mask"].unsqueeze(-1).float()
             mean_embeddings = (
@@ -79,26 +71,17 @@ class BertEmbedder:
         else:
             return torch.device("cpu")
 
-
-# ──────────────────────────────────────────────
-# CONSTRUCTION DU DATAFRAME FINAL
-# ──────────────────────────────────────────────
-
+# construction dataframe final
 def build_embedding_dataframe(df_sentences: pd.DataFrame, embeddings: np.ndarray) -> pd.DataFrame:
     """
-    Construit un DataFrame avec :
-      - les métadonnées (PRIMARY_KEY, doc_id, date, classe)
-      - une colonne 'embedding' contenant le vecteur float32 de 768 dimensions
+    Construction d'un dataframe avec :
+      - données : PRIMARY_KEY, doc_id, date, classe
+      - une colonne 'embedding' contenant le vecteur float
     """
     meta_cols = ["PRIMARY_KEY", "doc_id", "date", "classe"]
     df_meta = df_sentences[meta_cols].reset_index(drop=True).copy()
     df_meta["embedding"] = list(embeddings.astype(np.float32))
     return df_meta
-
-
-# ──────────────────────────────────────────────
-# MAIN
-# ──────────────────────────────────────────────
 
 def main():
     parser = argparse.ArgumentParser(description="Embedding BERT → parquet colonne embedding[768]")
@@ -108,21 +91,21 @@ def main():
     parser.add_argument("--batch_size", default=BATCH_SIZE, type=int,         help="Taille des batchs")
     args = parser.parse_args()
 
-    # ── Chargement ──
-    print(f"\n📂 Chargement de : {args.input}")
+    # chargement
+    print(f"\nChargement de : {args.input}")
     df = pd.read_parquet(args.input)
     print(f"   {len(df)} phrases chargées\n")
     validate_schema(df, {"PRIMARY_KEY", "doc_id", "date", "classe", "sentence"}, "sentences.parquet")
 
-    # ── Encodage ──
+    # encoding
     encoder    = BertEmbedder(model_name=args.model)
     sentences  = df["sentence"].tolist()
     embeddings = encoder.encode(sentences, batch_size=args.batch_size)
 
-    # ── Construction du DataFrame final ──
+    # dataframe final
     df_final = build_embedding_dataframe(df, embeddings)
 
-    # ── Sauvegarde avec pyarrow (schéma explicite pour la colonne list) ──
+    # sauvegarde
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -145,7 +128,7 @@ def main():
     )
     pq.write_table(table, output_path, compression="snappy")
 
-    print(f"\n💾 Parquet sauvegardé → {output_path}")
+    print(f"\nParquet sauvegardé → {output_path}")
     print(f"   {len(df_final)} phrases × 1 colonne embedding (768 dims, float32, snappy)")
     print(f"   Colonnes : {list(df_final.columns)}\n")
 
