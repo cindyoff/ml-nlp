@@ -11,7 +11,7 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
 )
 
-# ── Fichier de sortie attendu par étape (None = toujours exécuter) ─────────────
+# fichier de sortie attendu par étape
 STEP_OUTPUTS = {
     "sentences"           : config.SENTENCES_PATH,
     "embeddings"          : config.EMBEDDINGS_PATH,
@@ -73,28 +73,28 @@ def run_pipeline(steps=None, force=False):
 
     steps = steps or list(all_steps.keys())
 
-    # Validation des noms d'étapes
+    # validation des noms d'étapes
     unknown = [s for s in steps if s not in all_steps]
     if unknown:
-        logging.error(f"✗ Étapes inconnues : {unknown}. Disponibles : {list(all_steps)}")
+        logging.error(f"Étapes inconnues : {unknown} - Disponibles : {list(all_steps)}")
         raise SystemExit(1)
 
     start_time0 = time.perf_counter()
 
     for step_name in steps:
-        # ── Checkpoint : skip si l'output existe déjà ──
+        # checkpoint (skip si output existe déjà)
         output = STEP_OUTPUTS.get(step_name)
         if output and Path(output).exists() and not force:
-            logging.info(f"⏭  Skip '{step_name}' — output déjà présent : {output}  (--force pour forcer)")
+            logging.info(f"Skip '{step_name}' — output déjà présent : {output}")
             continue
 
         start_time = time.perf_counter()
-        logging.info(f"▶ Running step: {step_name}")
+        logging.info(f"Running step: {step_name}")
 
         try:
             all_steps[step_name]()
         except subprocess.CalledProcessError as e:
-            logging.error(f"✗ Étape '{step_name}' échouée (exit code {e.returncode})")
+            logging.error(f"Étape '{step_name}' échouée (exit code {e.returncode})")
             raise SystemExit(1)
 
         elapsed = time.perf_counter() - start_time
