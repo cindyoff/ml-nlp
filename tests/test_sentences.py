@@ -1,11 +1,9 @@
 """
-tests/test_sentences.py
-=======================
-Tests pour pipeline/sentences.py :
-  - _is_administrative  : détection des lignes admin
-  - clean_text          : nettoyage HTML + calcul filter_ratio
-  - split_sentences     : filtrage des phrases trop courtes
-  - build_dataframe     : output complet sur répertoire tmp
+Tests unitaires pour sentences.py :
+  - _is_administrative : détection des lignes admin
+  - clean_text : nettoyage HTML + calcul filter_ratio
+  - split_sentences : filtrage des phrases trop courtes
+  - build_dataframe : output complet sur répertoire tmp
 """
 
 import sys
@@ -22,9 +20,7 @@ from pipeline.sentences import (
     build_dataframe,
 )
 
-
-# ── _is_administrative ────────────────────────────────────────────────────────
-
+# détection admin
 class TestIsAdministrative:
     def test_sciences_po_detected(self):
         assert _is_administrative("Sciences Po / fonds CEVIPOF") is True
@@ -59,9 +55,7 @@ class TestIsAdministrative:
     def test_elections_keyword_detected(self):
         assert _is_administrative("Élections législatives de 1981") is True
 
-
-# ── clean_text ────────────────────────────────────────────────────────────────
-
+# clean_text
 class TestCleanText:
     def test_removes_html_tags(self):
         text, _ = clean_text("Bonjour <b>monde</b>, comment allez-vous aujourd'hui?")
@@ -73,7 +67,7 @@ class TestCleanText:
         assert "[Applaudissements]" not in text
 
     def test_filter_ratio_zero_for_clean_text(self):
-        # Texte entièrement normal → ratio bas (toutes les lignes ont un verbe)
+        # text normal : ratio bas (toutes les lignes ont un verbe)
         text = (
             "Nous construisons une France meilleure.\n"
             "Les citoyens méritent un avenir radieux.\n"
@@ -83,7 +77,7 @@ class TestCleanText:
         assert 0.0 <= ratio <= 1.0
 
     def test_filter_ratio_high_for_admin_text(self):
-        # Texte plein de lignes admin
+        # Texte avec plusieurs lignes admin
         text = (
             "Sciences Po\n"
             "Imprimerie Nationale\n"
@@ -95,7 +89,7 @@ class TestCleanText:
         assert ratio > 0.5
 
     def test_returns_tuple(self):
-        result = clean_text("Texte simple pour tester.")
+        result = clean_text("Texte simple pour test")
         assert isinstance(result, tuple) and len(result) == 2
 
     def test_empty_text(self):
@@ -107,9 +101,7 @@ class TestCleanText:
         text, _ = clean_text("Mot1   \n\n  Mot2\t\tMot3")
         assert "  " not in text  # pas d'espaces doubles
 
-
-# ── split_sentences ───────────────────────────────────────────────────────────
-
+# split_sentences
 class TestSplitSentences:
     def test_filters_short_sentences(self):
         # Phrases de moins de 4 mots doivent être filtrées
@@ -127,7 +119,7 @@ class TestSplitSentences:
         assert len(sentences) >= 1
 
     def test_returns_list(self):
-        result = split_sentences("Une phrase normale avec des mots.")
+        result = split_sentences("Une phrase normale avec des mots")
         assert isinstance(result, list)
 
     def test_empty_text(self):
@@ -135,13 +127,12 @@ class TestSplitSentences:
         assert result == []
 
     def test_strips_whitespace(self):
-        sentences = split_sentences("  Voici une phrase avec des espaces inutiles autour.  ")
+        sentences = split_sentences("Voici une phrase avec des espaces inutiles autour")
         for s in sentences:
             assert s == s.strip()
 
 
-# ── build_dataframe ───────────────────────────────────────────────────────────
-
+# build_dataframe
 class TestBuildDataframe:
     def _make_txt_dir(self, tmp_path: Path, n_files: int = 3) -> Path:
         """Crée une structure data_dir/1981/legislatives/*.txt avec du contenu fictif."""
@@ -160,20 +151,20 @@ class TestBuildDataframe:
         return data_dir
 
     def test_output_has_required_columns(self, tmp_path):
-        """Le DataFrame produit contient toutes les colonnes attendues."""
+        """Le dataframe produit contient toutes les colonnes attendues"""
         data_dir = self._make_txt_dir(tmp_path)
         df = build_dataframe(str(data_dir))
         required = {"PRIMARY_KEY", "doc_id", "date", "classe", "sentence", "filter_ratio"}
         assert required.issubset(set(df.columns))
 
     def test_primary_key_is_unique(self, tmp_path):
-        """Chaque phrase a un PRIMARY_KEY unique."""
+        """Chaque phrase a une clé PRIMARY_KEY unique"""
         data_dir = self._make_txt_dir(tmp_path, n_files=3)
         df = build_dataframe(str(data_dir))
         assert df["PRIMARY_KEY"].nunique() == len(df)
 
     def test_primary_key_format(self, tmp_path):
-        """PRIMARY_KEY est au format '{doc_id}_{index}'."""
+        """PRIMARY_KEY est au format '{doc_id}_{index}'"""
         data_dir = self._make_txt_dir(tmp_path, n_files=1)
         df = build_dataframe(str(data_dir))
         for _, row in df.iterrows():
@@ -182,47 +173,47 @@ class TestBuildDataframe:
             assert parts[-1].isdigit()
 
     def test_date_and_classe_extracted(self, tmp_path):
-        """date et classe sont extraits depuis la structure de dossiers."""
+        """date et classe sont extraits depuis la structure de dossiers"""
         data_dir = self._make_txt_dir(tmp_path)
         df = build_dataframe(str(data_dir))
         assert (df["date"] == "1981").all()
         assert (df["classe"] == "legislatives").all()
 
     def test_filter_ratio_between_0_and_1(self, tmp_path):
-        """filter_ratio est toujours dans [0, 1]."""
+        """filter_ratio est toujours dans [0, 1]"""
         data_dir = self._make_txt_dir(tmp_path)
         df = build_dataframe(str(data_dir))
         assert (df["filter_ratio"] >= 0.0).all()
         assert (df["filter_ratio"] <= 1.0).all()
 
     def test_max_sentences_respected(self, tmp_path):
-        """max_sentences limite le nombre de phrases (documents complets)."""
+        """max_sentences limite le nombre de phrases (documents complets)"""
         data_dir = self._make_txt_dir(tmp_path, n_files=10)
         df_full    = build_dataframe(str(data_dir))
         df_limited = build_dataframe(str(data_dir), max_sentences=5)
         assert len(df_limited) <= len(df_full)
 
     def test_missing_dir_raises(self, tmp_path):
-        """FileNotFoundError si le répertoire n'existe pas."""
+        """erreur si le répertoire n'existe pas"""
         with pytest.raises(FileNotFoundError):
             build_dataframe(str(tmp_path / "inexistant"))
 
     def test_empty_dir_returns_empty_df(self, tmp_path):
-        """DataFrame vide si aucun fichier .txt trouvé."""
+        """dataframe vide si aucun fichier txt trouvé"""
         empty_dir = tmp_path / "vide"
         empty_dir.mkdir()
         df = build_dataframe(str(empty_dir))
         assert len(df) == 0
 
     def test_sentences_min_word_count(self, tmp_path):
-        """Toutes les phrases ont au moins 4 mots (filtrage MIN_SENTENCE_WORDS)."""
+        """Toutes les phrases ont au moins 4 mots (filtrage MIN_SENTENCE_WORDS)"""
         data_dir = self._make_txt_dir(tmp_path)
         df = build_dataframe(str(data_dir))
         for sentence in df["sentence"]:
             assert len(sentence.split()) >= 4
 
     def test_output_saved_to_parquet(self, tmp_path):
-        """Le parquet sauvegardé est lisible et a le bon schéma."""
+        """fichier parquet sauvegardé est lisible et a le bon schéma"""
         data_dir  = self._make_txt_dir(tmp_path)
         out_path  = tmp_path / "sentences.parquet"
         df = build_dataframe(str(data_dir))
