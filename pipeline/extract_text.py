@@ -1,7 +1,5 @@
 import sqlite3
 from .config import Path_Sciencespo
-from arkindex_export import open_database, Element, Transcription, database
-from arkindex_export.queries import list_children
 from pathlib import Path
 from tqdm import tqdm
 
@@ -9,6 +7,7 @@ def index_database(db_path: Path, vacuum: bool = False):
     """
     Add performance indexes to an Arkindex SQLite export.
     """
+    from arkindex_export import open_database, database
 
     # Initialize database connection
     open_database(db_path)
@@ -46,6 +45,8 @@ def index_database(db_path: Path, vacuum: bool = False):
 
 
 def extract_to_txt():
+    from arkindex_export import open_database, Element, Transcription
+    from arkindex_export.queries import list_children
     TEXT_FOLDER = "data/text_files"
     path_txt = Path(TEXT_FOLDER)
     path_txt.mkdir(exist_ok=True)
@@ -96,8 +97,9 @@ def extract_to_txt():
                         transcriptions_number += 1
                 print("Number of transcriptions", transcriptions_number)
 
-if __name__ == "__main__":  
-        # Index the database before opening it
+if __name__ == "__main__":
+    from arkindex_export import open_database
+    # Index the database before opening it
     index_database(Path_Sciencespo)
 
     # load the  export
