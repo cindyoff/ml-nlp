@@ -1,7 +1,5 @@
 """
-tests/test_merger.py
-====================
-Tests unitaires pour pipeline/merger.py :
+Tests unitaires pour merger.py :
   - merge happy path
   - clés manquantes (warning seulement, pas d'erreur)
   - colonne embedding présente en sortie
@@ -45,7 +43,7 @@ def _make_features(n=10) -> pd.DataFrame:
 
 class TestMerge:
     def test_happy_path(self, tmp_path):
-        """Fusion normale : output contient les colonnes des deux sources."""
+        """Fusion normale : output contient les colonnes des deux sources en même temps"""
         emb_path  = tmp_path / "embeddings.parquet"
         feat_path = tmp_path / "features.parquet"
         out_path  = tmp_path / "final.parquet"
@@ -61,7 +59,7 @@ class TestMerge:
         assert len(df) == 10
 
     def test_output_has_embedding_col(self, tmp_path):
-        """La colonne 'embedding' est présente dans final.parquet."""
+        """La colonne 'embedding' est présente dans fichier final.parquet"""
         emb_path  = tmp_path / "embeddings.parquet"
         feat_path = tmp_path / "features.parquet"
         out_path  = tmp_path / "final.parquet"
@@ -75,7 +73,7 @@ class TestMerge:
         assert "embedding" in df.columns
 
     def test_missing_keys_does_not_raise(self, tmp_path, capsys):
-        """Clés manquantes dans features → warning affiché, pas d'exception."""
+        """Clés manquantes dans features : warning affiché, pas d'exception"""
         emb_path  = tmp_path / "embeddings.parquet"
         feat_path = tmp_path / "features.parquet"
         out_path  = tmp_path / "final.parquet"
@@ -92,13 +90,13 @@ class TestMerge:
         assert "clés présentes dans embeddings" in captured.out
 
     def test_schema_validation_raises_missing_embedding(self, tmp_path):
-        """validate_schema lève ValueError si la colonne 'embedding' est absente."""
+        """validate_schema lève ValueError si la colonne 'embedding' est absente"""
         df = pd.DataFrame({"PRIMARY_KEY": ["a", "b"]})
         with pytest.raises(ValueError, match="embedding"):
             validate_schema(df, {"PRIMARY_KEY", "embedding"}, "embeddings.parquet")
 
     def test_output_shape(self, tmp_path):
-        """Le nombre de lignes en sortie correspond à features (jointure gauche sur features)."""
+        """Le nombre de lignes en sortie correspond à features (jointure gauche sur features)"""
         emb_path  = tmp_path / "embeddings.parquet"
         feat_path = tmp_path / "features.parquet"
         out_path  = tmp_path / "final.parquet"
