@@ -56,11 +56,11 @@ def main():
                         help="Graine aléatoire pour la reproductibilité")
     args = parser.parse_args()
 
-    print(f"\n📂 Chargement : {args.input}")
+    print(f"\nChargement : {args.input}")
     df = pd.read_parquet(args.input)
     print(f"   {len(df)} phrases, {df['doc_id'].nunique()} documents\n")
 
-    print(f"🎯 Échantillonnage stratifié → cible : {args.target} phrases")
+    print(f"Échantillonnage stratifié et cible : {args.target} phrases")
     sample = sample_documents(df, target=args.target, seed=args.seed)
 
     # Colonnes utiles pour l'annotation + colonne label vide
