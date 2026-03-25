@@ -238,7 +238,7 @@ embeddings.parquet           features.parquet
 python main.py
 
 # Complet
-python main.py --steps sentences embedding features_engineering merger label modelise statistique_resume
+python main.py --steps sentences embeddings features_engineering merger label modelise statistique_resume
 
 # Lancement du second dashboard
 streamlit run dashboard.py
