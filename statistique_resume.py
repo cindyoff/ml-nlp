@@ -276,7 +276,7 @@ for tab_res, proba_key, model_label in [
 
         with col_hl1:
             st.markdown("#### Test de Hosmer-Lemeshow")
-            verdict = "Mauvaise calibration (p < 0.05)" if pval_hl < 0.05 else "Bonne calibration (p >= 0.05)"
+            verdict = "Mauvaise calibration (p < 0.05)" if pval_hl < 0.05 else "Calibration acceptable (p >= 0.05)"
             st.metric("χ²", f"{chi2_hl:.3f}")
             st.metric("p-value", f"{pval_hl:.4f}")
             st.info(verdict)
