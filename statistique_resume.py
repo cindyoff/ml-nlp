@@ -334,9 +334,6 @@ for tab_res, proba_key, model_label in [
         with col_r2:
             st.markdown("#### Résidus de Pearson")
             p_res = pearson_residuals(y_true, proba)
-            rng   = np.random.default_rng(42)
-            sample = p_res if len(p_res) <= 5000 else p_res[rng.choice(len(p_res), 5000, replace=False)]
-            sw_stat, sw_pval = stats.shapiro(sample)
 
             fig_pr = go.Figure()
             fig_pr.add_trace(go.Histogram(
@@ -349,7 +346,6 @@ for tab_res, proba_key, model_label in [
             )
             st.plotly_chart(fig_pr, use_container_width=True)
             st.caption(
-                f"Shapiro-Wilk : W = {sw_stat:.4f},  p = {sw_pval:.4f}\n"
                 f"Moyenne = {p_res.mean():.4f}  |  Std = {p_res.std():.4f}"
             )
 
