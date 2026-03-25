@@ -1,18 +1,10 @@
 """
-annotate.py
-===========
-Annote automatiquement annotation_sample.csv avec l'API Claude.
+Annotation automatique avec API Claude (annotation_sample.csv)
 
 Labels :
   - langue_de_bois     : rhétorique vague, slogans creux, promesses floues
   - non_langue_de_bois : affirmations concrètes, faits précis, chiffres, actions spécifiques
   - autre              : texte administratif, métadonnées, entêtes, texte non-français, bruit OCR
-
-Usage :
-    python annotate.py \
-        --input  data/labels/annotation_sample.csv \
-        --output data/labels/annotation_sample.csv \
-        --batch  40
 """
 
 import argparse
@@ -57,7 +49,7 @@ def annotate_batch(client: anthropic.Anthropic, batch: pd.DataFrame, model: str)
 
     import json
     text = response.content[0].text.strip()
-    # Extraire le JSON si entouré de backticks
+    # extraction json
     if text.startswith("```"):
         text = text.split("```")[1]
         if text.startswith("json"):
@@ -93,7 +85,7 @@ def main():
     total = len(batches)
 
     for idx, batch in enumerate(batches, 1):
-        print(f"  Batch {idx}/{total} ({len(batch)} phrases)...", end=" ", flush=True)
+        print(f"Batch {idx}/{total} ({len(batch)} phrases)...", end=" ", flush=True)
         try:
             labels = annotate_batch(client, batch, args.model)
             for pk, label in labels.items():
@@ -101,28 +93,26 @@ def main():
             print(f"OK — {len(labels)} annotées")
         except Exception as e:
             print(f"ERREUR : {e}")
-            # Sauvegarde partielle avant de re-lever
+            # sauvegarde partielle
             df.to_csv(args.output, index=False, encoding="utf-8")
             raise
 
-        # Sauvegarde incrémentale toutes les 5 batches
+        # sauvegarde progressive
         if idx % 5 == 0:
             df.to_csv(args.output, index=False, encoding="utf-8")
             print(f"    💾 Sauvegarde intermédiaire → {args.output}")
 
-        # Pause légère pour respecter les rate limits
         if idx < total:
             time.sleep(0.5)
 
     df.to_csv(args.output, index=False, encoding="utf-8")
 
     annotated = df[df["label"].str.strip() != ""]
-    print(f"\n✅ Terminé — {len(annotated)}/{len(df)} phrases annotées")
-    print(f"💾 Sauvegardé → {args.output}\n")
+    print(f"\nTerminé — {len(annotated)}/{len(df)} phrases annotées")
+    print(f"Sauvegardé → {args.output}\n")
     print("Distribution des labels :")
     for lbl, cnt in sorted(df["label"].value_counts().items()):
         print(f"  {lbl:25s} : {cnt}")
-
 
 if __name__ == "__main__":
     main()
