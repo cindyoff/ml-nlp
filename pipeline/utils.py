@@ -2,8 +2,8 @@ from pathlib import Path
 
 def load_lexicon(path: str) -> set[str]:
     """
-    Lit un fichier txt (un mot/expression par ligne) et retourne un set.
-    Ignore les lignes vides et les commentaires (#).
+    Lecture fichier txt et retour d'un set
+    Ignore les lignes vides et commentaires
     """
     return {
         line.strip().lower()
@@ -12,7 +12,7 @@ def load_lexicon(path: str) -> set[str]:
     }
 
 def load_lexicons(*paths: str) -> set[str]:
-    """Fusionne plusieurs fichiers txt en un seul set."""
+    """Fusion de plusieurs txt en un seul set"""
     result = set()
     for path in paths:
         result |= load_lexicon(path)
