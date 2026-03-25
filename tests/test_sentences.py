@@ -41,7 +41,7 @@ class TestIsAdministrative:
         assert _is_administrative("   ") is True
 
     def test_short_line_no_verb_detected(self):
-        # Moins de 6 mots, sans verbe → admin
+        # moins de six mots et sans verbe alors admin
         assert _is_administrative("Mon programme politique") is True
 
     def test_normal_sentence_kept(self):
@@ -77,7 +77,7 @@ class TestCleanText:
         assert 0.0 <= ratio <= 1.0
 
     def test_filter_ratio_high_for_admin_text(self):
-        # Texte avec plusieurs lignes admin
+        # texte avec plusieurs lignes admin
         text = (
             "Sciences Po\n"
             "Imprimerie Nationale\n"
@@ -104,7 +104,7 @@ class TestCleanText:
 # split_sentences
 class TestSplitSentences:
     def test_filters_short_sentences(self):
-        # Phrases de moins de 4 mots doivent être filtrées
+        # phrases de moins de 4 mots filtrées
         text = "Oui. Non. Je veux une France plus juste et solidaire pour tous."
         sentences = split_sentences(text)
         for s in sentences:
@@ -135,7 +135,7 @@ class TestSplitSentences:
 # build_dataframe
 class TestBuildDataframe:
     def _make_txt_dir(self, tmp_path: Path, n_files: int = 3) -> Path:
-        """Crée une structure data_dir/1981/legislatives/*.txt avec du contenu fictif."""
+        """Crée une structure data_dir/1981/legislatives/*.txt avec du contenu fictif"""
         data_dir = tmp_path / "text_files"
         doc_dir  = data_dir / "1981" / "legislatives"
         doc_dir.mkdir(parents=True)
