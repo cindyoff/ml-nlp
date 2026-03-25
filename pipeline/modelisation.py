@@ -1,27 +1,16 @@
 """
-modelisation.py
-===============
-Entraîne et évalue des classifieurs sur les phrases annotées de final_labeled.parquet.
+Régression logistique et XGBoost
 
 Étapes :
-  1. Chargement + split stratifié 70 / 15 / 15 (train / val / test)
+  1. split stratifié 70 (train), 15 (validation), 15 (test)
   2. Régression logistique :
-       - Sélection des features par Information Value (IV ≥ 0.02)
-       - Test de significativité Wald (p ≤ 0.05) via statsmodels
-       - Calibration du seuil de Bayes optimal sur la validation
+       - sélection par IV (IV < 0.02)
+       - test de Wald sur sélection par IV
+       - calibration sur seuil de Bayes optimal sur la validation
   3. XGBoost :
-       - Features linguistiques + embeddings (768 dims)
-       - Optimisation des hyperparamètres par RandomizedSearchCV (CV stratifié)
-       - Calibration du seuil de Bayes optimal sur la validation
-  4. Sauvegarde dans outputs/models/ :
-       - {model}_estimator.joblib
-       - {model}_params.json
-       - evaluation.json (métriques train / val / test)
-
-Usage :
-    python -m pipeline.modelisation \
-        --input   outputs/final_labeled.parquet \
-        --output  outputs/models/
+       - linguistic features + embeddings
+       - recharche hyperparamètres par RandomizedSearchCV
+       - calibration du seuil de Bayes optimal sur la validation
 """
 
 import argparse
@@ -51,7 +40,7 @@ from sklearn.preprocessing import StandardScaler
 
 logger = logging.getLogger(__name__)
 
-# ── Colonnes de features linguistiques ────────────────────────────────────────
+# linguistic features
 LINGUISTIC_FEATURES = [
     "n_digits", "n_dates", "n_money", "n_percent", "numeric_ratio",
     "n_vague_words", "vague_ratio",
@@ -65,11 +54,7 @@ LABEL_COL = "label"
 POS_LABEL = "langue_de_bois"
 NEG_LABEL = "non_langue_de_bois"
 
-
-# ──────────────────────────────────────────────
-# 1. CHARGEMENT ET SPLIT
-# ──────────────────────────────────────────────
-
+# chargement + split
 def load_and_split(
     input_path: str,
     test_size: float = 0.15,
@@ -77,23 +62,21 @@ def load_and_split(
     seed: int = 42,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
-    Charge final_labeled.parquet, garde les 2 classes annotées,
-    retourne (train, val, test) avec split stratifié.
+    Split train, test, validation
     """
     df = pd.read_parquet(input_path)
     validate_schema(df, set(LINGUISTIC_FEATURES) | {LABEL_COL, "embedding"}, "final_labeled.parquet")
     df_ann = df[df[LABEL_COL].isin([POS_LABEL, NEG_LABEL])].copy()
     df_ann["y"] = (df_ann[LABEL_COL] == POS_LABEL).astype(int)
 
-    print(f"\n📊 Données annotées : {len(df_ann)} phrases")
-    print(f"   {POS_LABEL}     : {(df_ann['y'] == 1).sum()}")
-    print(f"   {NEG_LABEL} : {(df_ann['y'] == 0).sum()}\n")
+    print(f"\nDonnées annotées : {len(df_ann)} phrases")
+    print(f"{POS_LABEL}     : {(df_ann['y'] == 1).sum()}")
+    print(f"{NEG_LABEL} : {(df_ann['y'] == 0).sum()}\n")
 
-    # Split train+val / test
     train_val, test = train_test_split(
         df_ann, test_size=test_size, stratify=df_ann["y"], random_state=seed
     )
-    # Split train / val (proportion relative)
+
     relative_val = val_size / (1 - test_size)
     train, val = train_test_split(
         train_val, test_size=relative_val, stratify=train_val["y"], random_state=seed
@@ -102,13 +85,9 @@ def load_and_split(
     print(f"   Train : {len(train)}  |  Val : {len(val)}  |  Test : {len(test)}\n")
     return train, val, test
 
-
-# ──────────────────────────────────────────────
-# 2. INFORMATION VALUE
-# ──────────────────────────────────────────────
-
+# iv
 def compute_iv(series: pd.Series, target: pd.Series, bins: int = 10) -> float:
-    """Calcule l'Information Value d'une feature continue."""
+    """calcul IV pour chaque variable"""
     df = pd.DataFrame({"x": series.values, "y": target.values})
     try:
         df["bin"] = pd.qcut(df["x"], q=bins, duplicates="drop")
@@ -132,14 +111,13 @@ def compute_iv(series: pd.Series, target: pd.Series, bins: int = 10) -> float:
     stats["iv"]  = (stats["d_ev"] - stats["d_nev"]) * stats["woe"]
     return float(stats["iv"].sum())
 
-
 def select_by_iv(
     df_train: pd.DataFrame,
     features: list[str],
     target_col: str = "y",
     threshold: float = 0.02,
 ) -> tuple[list[str], pd.DataFrame]:
-    """Retourne les features avec IV >= threshold et le tableau IV complet."""
+    """tableau IV complet pour chaque feature"""
     iv_scores = {f: compute_iv(df_train[f], df_train[target_col]) for f in features}
     iv_df = (
         pd.DataFrame.from_dict(iv_scores, orient="index", columns=["IV"])
@@ -147,18 +125,14 @@ def select_by_iv(
     )
     selected = iv_df[iv_df["IV"] >= threshold].index.tolist()
 
-    print(f"📋 Information Value (seuil {threshold}) :")
+    print(f"Information Value (seuil {threshold}) :")
     for feat, row in iv_df.iterrows():
         flag = "✓" if row["IV"] >= threshold else "✗"
         print(f"   {flag}  {feat:<32s}  IV = {row['IV']:.4f}")
     print(f"   → {len(selected)}/{len(features)} features retenues\n")
     return selected, iv_df
 
-
-# ──────────────────────────────────────────────
-# 3. TEST DE SIGNIFICATIVITÉ WALD (statsmodels)
-# ──────────────────────────────────────────────
-
+# wald test
 def select_by_significance(
     X_train: np.ndarray,
     y_train: np.ndarray,
@@ -166,8 +140,7 @@ def select_by_significance(
     alpha: float = 0.05,
 ) -> tuple[list[str], pd.DataFrame]:
     """
-    Ajuste une régression logistique via statsmodels, retourne les features
-    dont le test de Wald donne p <= alpha.
+    Test de Wald pour features pré-sélectionnées par IV
     """
     X_const = sm.add_constant(X_train, has_constant="add")
     model   = sm.Logit(y_train, X_const).fit(disp=False, maxiter=200)
@@ -175,18 +148,14 @@ def select_by_significance(
     pvals    = pd.Series(model.pvalues[1:], index=feature_names, name="p_value")
     selected = pvals[pvals <= alpha].index.tolist()
 
-    print(f"📋 Test de Wald (α = {alpha}) :")
+    print(f"Test de Wald (alpha = {alpha}) :")
     for feat, pv in pvals.sort_values().items():
         flag = "✓" if pv <= alpha else "✗"
         print(f"   {flag}  {feat:<32s}  p = {pv:.4f}")
     print(f"   → {len(selected)}/{len(feature_names)} features significatives\n")
     return selected, pvals.to_frame()
 
-
-# ──────────────────────────────────────────────
-# 4. CALIBRATION DU SEUIL DE BAYES
-# ──────────────────────────────────────────────
-
+# calibration seuil de bayes
 def calibrate_threshold(
     proba: np.ndarray,
     y_true: np.ndarray,
@@ -195,10 +164,7 @@ def calibrate_threshold(
     n_steps: int = 200,
 ) -> tuple[float, float]:
     """
-    Trouve le seuil qui minimise le risque de Bayes espéré sur la validation.
-    Risque = C_FP * #FP + C_FN * #FN.
-    Avec coûts égaux (défaut), cela revient à maximiser le F1.
-    Retourne (seuil_optimal, f1_au_seuil).
+    Minimisation du risque pour trouver le seuil optimal de Bayes
     """
     thresholds = np.linspace(0.01, 0.99, n_steps)
     best_t, best_risk = 0.5, np.inf
@@ -213,14 +179,10 @@ def calibrate_threshold(
             best_t    = t
 
     best_f1 = f1_score(y_true, (proba >= best_t).astype(int), zero_division=0)
-    print(f"   Seuil de Bayes optimal : {best_t:.3f}  (F1 val = {best_f1:.4f})\n")
+    print(f"Seuil de Bayes optimal : {best_t:.3f}  (F1 val = {best_f1:.4f})\n")
     return float(best_t), float(best_f1)
 
-
-# ──────────────────────────────────────────────
-# 5. ÉVALUATION
-# ──────────────────────────────────────────────
-
+# évaluation
 def evaluate_model(
     name: str,
     proba: np.ndarray,
@@ -232,14 +194,10 @@ def evaluate_model(
     auc    = roc_auc_score(y_true, proba) if len(np.unique(y_true)) > 1 else float("nan")
     print(f"\n📊 {name}  (seuil = {threshold:.3f})")
     print(classification_report(y_true, preds, zero_division=0))
-    print(f"   AUC-ROC : {auc:.4f}\n")
+    print(f"AUC-ROC : {auc:.4f}\n")
     return {"threshold": threshold, "auc_roc": auc, "report": report}
 
-
-# ──────────────────────────────────────────────
-# 6. RÉGRESSION LOGISTIQUE
-# ──────────────────────────────────────────────
-
+# régression logistic
 def train_logistic_regression(
     train: pd.DataFrame,
     val: pd.DataFrame,
@@ -249,17 +207,16 @@ def train_logistic_regression(
     seed: int = 42,
 ) -> tuple[Pipeline, dict, dict]:
     """
-    Entraîne une LR avec double sélection de variables (IV puis Wald).
-    Retourne (pipeline sklearn, params sauvegardables, métriques).
+    Régression logistique après IV et Wald
     """
     print("=" * 60)
-    print("  RÉGRESSION LOGISTIQUE")
+    print("RÉGRESSION LOGISTIQUE")
     print("=" * 60 + "\n")
 
-    # ── Sélection par IV ──
+    # sélection par IV
     features_iv, iv_df = select_by_iv(train, LINGUISTIC_FEATURES, threshold=iv_threshold)
     if not features_iv:
-        print("  ⚠  Aucune feature retenue par IV — conservation de toutes les features.")
+        print("Aucune feature enlevées par IV — conservation de toutes les features")
         features_iv = LINGUISTIC_FEATURES
 
     scaler_iv  = StandardScaler()
@@ -268,15 +225,15 @@ def train_logistic_regression(
     y_val      = val["y"].values
     y_test     = test["y"].values
 
-    # ── Sélection par test de Wald ──
+    # seconde sélection par wald test
     selected_feats, pval_df = select_by_significance(
         X_train_iv, y_train, features_iv, alpha=alpha
     )
     if not selected_feats:
-        print("  ⚠  Aucune feature significative — conservation des features IV.")
+        print("Aucune feature significative — conservation des features IV")
         selected_feats = features_iv
 
-    # ── Entraînement final sur features sélectionnées ──
+    # entraînement final sur features sélectionnées
     scaler_final = StandardScaler()
     X_train_sel  = scaler_final.fit_transform(train[selected_feats])
     X_val_sel    = scaler_final.transform(val[selected_feats])
@@ -285,15 +242,15 @@ def train_logistic_regression(
     lr = LogisticRegression(max_iter=500, random_state=seed, class_weight="balanced")
     lr.fit(X_train_sel, y_train)
 
-    # Pipeline sklearn (scaler intégré pour inférence future)
+    # pipeline
     pipe = Pipeline([("scaler", scaler_final), ("lr", lr)])
 
-    # ── Calibration du seuil ──
-    print("🎯 Calibration du seuil de Bayes (validation) :")
+    # calibration du seuil de Bayes
+    print("Calibration du seuil de Bayes (validation) :")
     proba_val = lr.predict_proba(X_val_sel)[:, 1]
     threshold, _ = calibrate_threshold(proba_val, y_val)
 
-    # ── Évaluation ──
+    # predict proba
     proba_train = lr.predict_proba(X_train_sel)[:, 1]
     proba_test  = lr.predict_proba(X_test_sel)[:, 1]
     metrics = {
@@ -315,13 +272,9 @@ def train_logistic_regression(
     }
     return pipe, params, metrics
 
-
-# ──────────────────────────────────────────────
-# 7. XGBOOST
-# ──────────────────────────────────────────────
-
+# xgboost
 def build_xgb_features(df: pd.DataFrame) -> np.ndarray:
-    """Concatène features linguistiques + embeddings (768 dims)."""
+    """xgboost features"""
     X_ling = df[LINGUISTIC_FEATURES].values.astype(np.float32)
     embeds = np.stack(df["embedding"].values).astype(np.float32)
     return np.hstack([X_ling, embeds])
@@ -336,7 +289,7 @@ def train_xgboost(
     seed: int = 42,
 ) -> tuple[xgb.XGBClassifier, dict, dict]:
     print("=" * 60)
-    print("  XGBOOST")
+    print("xgboost")
     print("=" * 60 + "\n")
 
     X_train = build_xgb_features(train)
@@ -370,7 +323,7 @@ def train_xgboost(
         verbosity=0,
     )
 
-    print(f"🔍 RandomizedSearchCV ({n_iter} itérations, CV={cv_folds} folds)...\n")
+    print(f"RandomizedSearchCV ({n_iter} itérations, CV={cv_folds} folds)\n")
     cv = StratifiedKFold(n_splits=cv_folds, shuffle=True, random_state=seed)
     search = RandomizedSearchCV(
         base_xgb,
@@ -384,14 +337,14 @@ def train_xgboost(
     )
     search.fit(X_train, y_train)
     best_xgb = search.best_estimator_
-    print(f"\n✅ Meilleurs hyperparamètres :\n   {search.best_params_}\n")
+    print(f"\nMeilleurs hyperparamètres :\n   {search.best_params_}\n")
 
-    # ── Calibration du seuil ──
-    print("🎯 Calibration du seuil de Bayes (validation) :")
+    # calibration du seuil de bayes
+    print("Calibration du seuil de Bayes (validation) :")
     proba_val = best_xgb.predict_proba(X_val)[:, 1]
     threshold, _ = calibrate_threshold(proba_val, y_val)
 
-    # ── Évaluation ──
+    # evaluation
     proba_train = best_xgb.predict_proba(X_train)[:, 1]
     proba_test  = best_xgb.predict_proba(X_test)[:, 1]
     metrics = {
@@ -409,11 +362,7 @@ def train_xgboost(
     }
     return best_xgb, params, metrics
 
-
-# ──────────────────────────────────────────────
-# 8. PRÉDICTIONS SUR LE CORPUS COMPLET
-# ──────────────────────────────────────────────
-
+# prédiction sur corpus complet
 def predict_all(
     full_path: str,
     lr_pipe: Pipeline,
@@ -423,49 +372,42 @@ def predict_all(
     xgb_threshold: float,
 ) -> pd.DataFrame:
     """
-    Applique les deux estimateurs sur les ~110 000 phrases de final.parquet.
-    Ajoute quatre colonnes :
-      - proba_lr    : probabilité langue_de_bois (LR)
-      - pred_lr     : label prédit (LR, seuil calibré)
-      - proba_xgb   : probabilité langue_de_bois (XGBoost)
-      - pred_xgb    : label prédit (XGBoost, seuil calibré)
+      - proba_lr
+      - pred_lr
+      - proba_xgb
+      - pred_xgb
     """
     print("=" * 60)
-    print("  PRÉDICTIONS — CORPUS COMPLET")
+    print("PRÉDICTIONS — CORPUS COMPLET")
     print("=" * 60 + "\n")
 
-    print(f"📂 Chargement : {full_path}")
+    print(f"Chargement : {full_path}")
     df = pd.read_parquet(full_path)
     print(f"   {len(df)} phrases chargées\n")
 
-    # ── LR ──
-    print("🔄 Prédictions LR...")
+    # régression logistique
+    print("Prédictions LR...")
     X_lr        = df[lr_features].values.astype(np.float32)
     proba_lr    = lr_pipe.predict_proba(X_lr)[:, 1]
     df["proba_lr"] = proba_lr
     df["pred_lr"]  = np.where(proba_lr >= lr_threshold, POS_LABEL, NEG_LABEL)
 
-    # ── XGBoost ──
-    print("🔄 Prédictions XGBoost...")
+    # xgboost
+    print("Prédictions XGBoost...")
     X_xgb        = build_xgb_features(df)
     proba_xgb    = xgb_model.predict_proba(X_xgb)[:, 1]
     df["proba_xgb"] = proba_xgb
     df["pred_xgb"]  = np.where(proba_xgb >= xgb_threshold, POS_LABEL, NEG_LABEL)
 
-    # Résumé
+    # résumé
     for model, col in [("LR", "pred_lr"), ("XGBoost", "pred_xgb")]:
         counts = df[col].value_counts()
         print(f"\n   {model} — distribution prédite :")
         for lbl, cnt in counts.items():
-            print(f"     {lbl} : {cnt}  ({cnt / len(df):.1%})")
+            print(f"{lbl} : {cnt}  ({cnt / len(df):.1%})")
     print()
 
     return df
-
-
-# ──────────────────────────────────────────────
-# 9. RUN PRINCIPAL
-# ──────────────────────────────────────────────
 
 def run(
     input_path: str,
@@ -484,7 +426,7 @@ def run(
     lr_pipe,   lr_params,  lr_metrics  = train_logistic_regression(train, val, test, seed=seed)
     xgb_model, xgb_params, xgb_metrics = train_xgboost(train, val, test, n_iter=n_iter, seed=seed)
 
-    # ── Prédictions sur le corpus complet ──
+    # prédictions sur corpus complet
     corpus_path = full_path or str(Path(input_path).parent / "final.parquet")
     df_predicted = predict_all(
         full_path      = corpus_path,
@@ -497,7 +439,7 @@ def run(
     predicted_out = Path(output_dir).parent / "final_predicted.parquet"
     df_predicted.to_parquet(predicted_out, index=False)
 
-    # ── Sauvegarde modèles / params ──
+    # sauvegarde
     print("=" * 60)
     print("  SAUVEGARDE")
     print("=" * 60 + "\n")
@@ -515,17 +457,12 @@ def run(
     with open(out / "evaluation.json", "w", encoding="utf-8") as f:
         json.dump(evaluation, f, ensure_ascii=False, indent=2, default=str)
 
-    print(f"💾 final_predicted.parquet → {predicted_out}")
-    print(f"💾 lr_estimator.joblib     → {out / 'lr_estimator.joblib'}")
-    print(f"💾 xgb_estimator.joblib    → {out / 'xgb_estimator.joblib'}")
-    print(f"💾 lr_params.json          → {out / 'lr_params.json'}")
-    print(f"💾 xgb_params.json         → {out / 'xgb_params.json'}")
-    print(f"💾 evaluation.json         → {out / 'evaluation.json'}\n")
-
-
-# ──────────────────────────────────────────────
-# MAIN
-# ──────────────────────────────────────────────
+    print(f"final_predicted.parquet : {predicted_out}")
+    print(f"lr_estimator.joblib : {out / 'lr_estimator.joblib'}")
+    print(f"xgb_estimator.joblib : {out / 'xgb_estimator.joblib'}")
+    print(f"lr_params.json : {out / 'lr_params.json'}")
+    print(f"xgb_params.json : {out / 'xgb_params.json'}")
+    print(f"evaluation.json : {out / 'evaluation.json'}\n")
 
 def main():
     parser = argparse.ArgumentParser(description="Entraînement des classifieurs langue de bois")
@@ -551,7 +488,6 @@ def main():
         datefmt="%H:%M:%S",
     )
     run(args.input, args.output, args.full, args.test_size, args.val_size, args.n_iter, args.seed)
-
 
 if __name__ == "__main__":
     main()
