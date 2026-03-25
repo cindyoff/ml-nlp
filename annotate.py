@@ -100,7 +100,7 @@ def main():
         # sauvegarde progressive
         if idx % 5 == 0:
             df.to_csv(args.output, index=False, encoding="utf-8")
-            print(f"    💾 Sauvegarde intermédiaire → {args.output}")
+            print(f"Sauvegarde intermédiaire : {args.output}")
 
         if idx < total:
             time.sleep(0.5)
