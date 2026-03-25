@@ -1,14 +1,8 @@
 """
-statistique_resume.py
-=====================
-Dashboard de résumé statistique des modèles de détection de langue de bois.
-
-Gauche  : Résumé des performances (métriques train / val / test, AUC, F1, etc.)
-Droite  : Propriétés des modèles (features sélectionnées, hyperparamètres, seuils)
-Bas     : Tests sur les résidus (Hosmer-Lemeshow, calibration, Pearson, déviance)
-
-Lancement :
-    streamlit run statistique_resume.py
+Dashboard Streamlit de résumé statistique des modèles de détection de langue de bois : LR + XGBoost
+- Résumé des performance (train, val, test, AUC, F1, precision, recall, accuracy)
+- Résumé hyperparamètres et features + seuils
+- Test résidus
 """
 
 import json
@@ -22,7 +16,7 @@ import streamlit as st
 from scipy import stats
 from sklearn.model_selection import train_test_split
 
-# ── Configuration ─────────────────────────────────────────────────────────────
+# configuration
 st.set_page_config(
     page_title="Résumé statistique — Modèles",
     page_icon="📊",
@@ -44,9 +38,7 @@ LINGUISTIC_FEATURES = [
     "filter_ratio",
 ]
 
-
-# ── Chargement ────────────────────────────────────────────────────────────────
-
+# chargement
 @st.cache_data(show_spinner=False)
 def load_evaluation():
     with open(MODELS_DIR / "evaluation.json", encoding="utf-8") as f:
@@ -79,9 +71,6 @@ def load_annotated(seed: int = 42, test_size: float = 0.15, val_size: float = 0.
         train_val, test_size=relative_val, stratify=train_val["y"], random_state=seed
     )
     return train, val, test
-
-
-# ── Helpers ───────────────────────────────────────────────────────────────────
 
 def build_metrics_table(model_metrics: dict) -> pd.DataFrame:
     rows = []
@@ -153,19 +142,17 @@ def calibration_data(y_true, proba, n_bins=10):
     ).reset_index()
     return grp.dropna()
 
-
-# ── APP ───────────────────────────────────────────────────────────────────────
-
-st.title("📊 Résumé statistique — Modèles de détection")
+# app
+st.title("Résumé statistique — Modèles de détection")
 st.caption("Langue de bois dans les discours de campagne électorale française (1981–1993)")
 
 for path in [MODELS_DIR / "evaluation.json", MODELS_DIR / "lr_params.json",
              MODELS_DIR / "xgb_params.json", LABELED_PATH]:
     if not path.exists():
-        st.error(f"Fichier manquant : `{path}`. Lance d'abord `python main.py --steps modelise`.")
+        st.error(f"Fichier manquant : `{path}`. Lancer d'abord `python main.py --steps modelise`")
         st.stop()
 
-with st.spinner("Chargement des modèles et prédictions…"):
+with st.spinner("Chargement des modèles et prédictions"):
     evaluation            = load_evaluation()
     lr_params, xgb_params = load_params()
     lr_pipe, xgb_model    = load_models()
@@ -182,7 +169,7 @@ col_left, col_right = st.columns(2, gap="large")
 
 # ── Gauche : Performances ────────────────────────────────────────────────────
 with col_left:
-    st.subheader("🏆 Performances")
+    st.subheader("Performances")
     tab_lr_m, tab_xgb_m = st.tabs(["Régression Logistique", "XGBoost"])
 
     for tab, eval_data, label in [
@@ -217,7 +204,7 @@ with col_left:
 
 # ── Droite : Propriétés ───────────────────────────────────────────────────────
 with col_right:
-    st.subheader("⚙️ Propriétés des modèles")
+    st.subheader("Propriétés des modèles")
     tab_lr_p, tab_xgb_p = st.tabs(["Régression Logistique", "XGBoost"])
 
     with tab_lr_p:
@@ -264,7 +251,7 @@ with col_right:
 # ── Section 2 : Résidus ───────────────────────────────────────────────────────
 
 st.divider()
-st.subheader("🔬 Analyse des résidus")
+st.subheader("Analyse des résidus")
 
 split_choice = st.radio(
     "Jeu de données :", ["test", "val", "train"],
@@ -289,11 +276,11 @@ for tab_res, proba_key, model_label in [
 
         with col_hl1:
             st.markdown("#### Test de Hosmer-Lemeshow")
-            verdict = "✅ Bien calibré (p > 0.05)" if pval_hl > 0.05 else "⚠️ Calibration douteuse (p ≤ 0.05)"
+            verdict = "Mauvaise calibration (p < 0.05)" if pval_hl < 0.05 else "Bonne calibration (p >= 0.05)"
             st.metric("χ²", f"{chi2_hl:.3f}")
             st.metric("p-value", f"{pval_hl:.4f}")
             st.info(verdict)
-            st.caption("H₀ : le modèle est bien calibré.\np > 0.05 → on ne rejette pas H₀.")
+            # st.caption("H₀ : le modèle est bien calibré.\np > 0.05 → on ne rejette pas H₀.")
 
         with col_hl2:
             fig_hl = go.Figure()
@@ -318,7 +305,7 @@ for tab_res, proba_key, model_label in [
 
         col_r1, col_r2, col_r3 = st.columns(3)
 
-        # ── Calibration ──────────────────────────────────────────────────────
+        # calibration 
         with col_r1:
             st.markdown("#### Courbe de calibration")
             cal = calibration_data(y_true, proba, n_bins=10)
@@ -343,7 +330,7 @@ for tab_res, proba_key, model_label in [
             )
             st.plotly_chart(fig_cal, use_container_width=True)
 
-        # ── Résidus de Pearson ───────────────────────────────────────────────
+        # résidus Pearson
         with col_r2:
             st.markdown("#### Résidus de Pearson")
             p_res = pearson_residuals(y_true, proba)
@@ -366,7 +353,7 @@ for tab_res, proba_key, model_label in [
                 f"Moyenne = {p_res.mean():.4f}  |  Std = {p_res.std():.4f}"
             )
 
-        # ── Résidus de déviance ──────────────────────────────────────────────
+        # résidus déviance
         with col_r3:
             st.markdown("#### Résidus de déviance")
             d_res = deviance_residuals(y_true, proba)
@@ -393,7 +380,7 @@ for tab_res, proba_key, model_label in [
                 f"Moyenne = {d_res.mean():.4f}  |  Std = {d_res.std():.4f}"
             )
 
-        # ── Distribution des proba par classe ────────────────────────────────
+        # distribution proba par classe
         st.markdown("#### Distribution des probabilités par classe réelle")
         fig_dist = go.Figure()
         for lval, lname, color in [
