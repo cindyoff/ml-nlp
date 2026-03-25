@@ -1,18 +1,9 @@
 """
-sample_annotation.py
-====================
-Génère un CSV d'annotation à partir de sentences.parquet.
+Génère un CSV d'annotation à partir de sentences.parquet
 
-Sélectionne des documents complets de façon stratifiée (par date/classe)
-jusqu'à atteindre la cible de phrases. Le CSV résultant contient une ligne
-par phrase avec une colonne "label" vide à remplir manuellement.
+Sélection de documents complets, avec stratification jusqu'à atteindre la cible de phrases
 
-Usage :
-    python sample_annotation.py \
-        --input   outputs/sentences.parquet \
-        --output  data/labels/annotation_sample.csv \
-        --target  1100 \
-        --seed    42
+Résultat CSV : 1 ligne = 1 phrase avec colonne "label" vide pour remplissage ultérieur
 """
 
 import argparse
@@ -21,26 +12,25 @@ import pandas as pd
 
 def sample_documents(df: pd.DataFrame, target: int, seed: int) -> pd.DataFrame:
     """
-    Sélectionne des documents complets de façon stratifiée jusqu'à ~target phrases.
-    La sélection est proportionnelle à la taille de chaque groupe (date × classe).
+    Sélection proportionnelle de documents complets avec stratification
     """
     groups   = df.groupby(["date", "classe"])
     total    = len(df)
     sampled_docs = []
 
     for (date, classe), group in groups:
-        # Proportion de phrases de ce groupe dans le corpus total
+        # proportion de phrases du groupe dans le corpus total
         proportion = len(group) / total
-        # Nombre de phrases cibles pour ce groupe
+        # nombre de phrases cibles pour ce groupe
         group_target = int(target * proportion)
 
-        # Documents disponibles dans ce groupe, mélangés aléatoirement
+        # docs dispo du groupe, aléatoire
         docs = group["doc_id"].unique().tolist()
         rng  = __import__("random")
         rng.seed(seed)
         rng.shuffle(docs)
 
-        # Ajouter des documents complets jusqu'à atteindre group_target
+        # ajout de docs complets
         n_phrases = 0
         for doc_id in docs:
             doc_sentences = group[group["doc_id"] == doc_id]
@@ -49,7 +39,7 @@ def sample_documents(df: pd.DataFrame, target: int, seed: int) -> pd.DataFrame:
             sampled_docs.append(doc_sentences)
             n_phrases += len(doc_sentences)
 
-        print(f"  [{date}/{classe}] {n_phrases} phrases ({len(sampled_docs)} docs au total jusqu'ici)")
+        print(f"[{date}/{classe}] {n_phrases} phrases ({len(sampled_docs)} docs au total jusqu'ici)")
 
     return pd.concat(sampled_docs, ignore_index=True)
 
@@ -81,11 +71,10 @@ def main():
     Path(args.output).parent.mkdir(parents=True, exist_ok=True)
     out.to_csv(args.output, index=False, encoding="utf-8")
 
-    print(f"\n✅ {len(out)} phrases issues de {out['doc_id'].nunique()} documents")
-    print(f"💾 CSV sauvegardé → {args.output}\n")
+    print(f"\n{len(out)} phrases issues de {out['doc_id'].nunique()} documents")
+    print(f"CSV sauvegardé → {args.output}\n")
     print("Remplis la colonne 'label' (langue_de_bois / non_langue_de_bois),")
     print("puis lance : python main.py --steps label\n")
-
 
 if __name__ == "__main__":
     main()
