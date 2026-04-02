@@ -10,7 +10,13 @@ ENSAE — MS Data Science — 2026
 
 ---
 
-## Données
+# Sommaire
+1. 
+
+# Introduction
++++
+
+# Données
 
 | Corpus | Documents | Type |
 |---|---|---|
@@ -22,9 +28,7 @@ ENSAE — MS Data Science — 2026
 
 Source : export SQLite Arkindex (`data/sciencespo-archelec-20260217-121320.sqlite`)
 
----
-
-## Structure du projet
+# Structure du projet
 
 ```
 ml-nlp/
@@ -92,164 +96,7 @@ ml-nlp/
         └── evaluation.json          
 ```
 
----
-
-## Installation des packages
-
-```bash
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-
-# Modèle spaCy français
-python -m spacy download fr_core_news_md
-
-# Données NLTK
-python -c "import nltk; nltk.download('punkt'); nltk.download('punkt_tab')"
-```
-
----
-
-## Démarche
-
-### Objectif
-
-Détecter la présence de "langue de bois" dans des discours de campagne électorale française pour des élections législatives et présidentielles (1981–1993).
-
-### Approche
-
-Faute de données annotées existantes, la démarche est semi-supervisée :
-
-1. **Représentation des phrases** — deux types de features complémentaires :
-   - *Features linguistiques interprétables* (concrétude, mots vagues, verbes modaux, entités nommées, sentiment) construites à partir de lexiques et de règles, ancrées dans la littérature sur la rhétorique politique
-   - *Embeddings CamemBERT* (768 dims, mean pooling) pour capturer le sens contextuel
-
-2. **Annotation manuelle ciblée** — plutôt que d'annoter les 369 478 phrases, un échantillon
-   de ~1 100 phrases est tiré de façon **stratifiée** (proportionnel à chaque année × type
-   d'élection) sur des **documents complets** (pas de phrases orphelines). Ces annotations
-   constituent la vérité terrain pour entraîner et évaluer un classifieur.
-
-3. **Classification supervisée** — entraînement sur les ~1 100 phrases annotées avec deux modèles
-   complémentaires, puis prédiction sur l'ensemble du corpus (~110 000 phrases).
-
-4. **Visualisation** — deux dashboards Streamlit pour explorer les prédictions et évaluer
-   statistiquement les modèles.
-
-### Deux modes de prétraitement comparables
-
-La pipeline peut être exécutée dans deux modes configurés dans `pipeline/config.py` sous `PROCESSING_MODES` :
-
-| Mode | `--mode` | Classes | Comportement |
-|---|---|---|---|
-| **Filtré** (défaut) | `filtered` | 2 | Lignes admin supprimées avant tokenisation |
-| **Trois classes** | `three_class` | 3 | Rien supprimé — les phrases admin annotées `autre` |
-
-Les outputs sont séparés par un suffixe (`_3class`) pour permettre la comparaison côte à côte :
-
-```
-outputs/sentences.parquet          ←  mode filtered
-outputs/sentences_3class.parquet   ←  mode three_class
-outputs/final_labeled.parquet
-outputs/final_3class_labeled.parquet
-```
-
-L'objectif est de comparer les deux classifieurs en fin de projet : le mode `filtered` ignore le bruit en amont, le mode `three_class` apprend à le reconnaître comme une classe à part entière. Ici, on se focalise sur le mode 2 classes. 
-
-### Choix techniques notables
-
-- **Filtre administratif en cascade** : les en-têtes (nom du candidat, imprimerie, "Sciences Po / CEVIPOF")
-  sont détectés par une cascade de règles (marqueurs explicites, patterns biographiques, absence de verbe
-  conjugué). En mode `filtered` ces lignes sont supprimées ; en mode `three_class` elles sont conservées
-  pour être annotées manuellement comme `autre`.
-- **`filter_ratio` comme feature** : dans les deux modes, on calcule la proportion de lignes détectées
-  comme administratives dans chaque document. Ce ratio est stocké dans `sentences.parquet` et propagé
-  jusqu'à `final.parquet`. Un document avec 70% de lignes "admin" est structurellement différent d'un
-  discours homogène — cette information aide le modèle à pondérer les phrases.
-- **Limite de 110 000 phrases** : volume suffisant pour des statistiques descriptives représentatives,
-  sans exploser les temps de calcul (~30–40 min pour features + embeddings).
-- **CSV comme source de vérité** pour les labels : format simple, versionnable, indépendant de l'ordre
-  de tokenisation — jointure sur `PRIMARY_KEY`. Le labeler valide les valeurs selon le mode.
-- **Double sélection de variables (LR)** : Information Value (IV ≥ 0.02) puis test de Wald (p ≤ 0.05)
-  pour ne conserver que les features statistiquement pertinentes.
-- **Seuil de Bayes calibré** : pour les deux modèles, le seuil de décision est optimisé sur le jeu de
-  validation en minimisant le risque de Bayes (coûts FP/FN égaux → maximise le F1).
-
----
-
-## Pipeline
-
-### Vue d'ensemble
-
-```
-SQLite (Arkindex)
-      │
-      ▼
- extract_text       →  data/text_files/{année}/{type}/*.txt
-      │
-      ▼
-  sentences              outputs/sentences.parquet
-(NLTK + filtre admin)    (doc_id, PRIMARY_KEY, date, classe, sentence, filter_ratio)
-  max 110 000 phrases    Documents complets, lignes admin filtrées
-      │
-      ├──────────────────────────────┐
-      ▼                              ▼
-  embedder                 features_engineering
-(CamemBERT, mean pooling) (spaCy NER + sentiment + règles)
-      │                              │
-      ▼                              ▼
-embeddings.parquet           features.parquet
-(PRIMARY_KEY + embedding[768])  (17 features linguistiques)
-      │                              │
-      └──────────────┬───────────────┘
-                     ▼
-                  merger           →  outputs/final.parquet
-                     │
-                     ▼
-                  labeler          ←  data/labels/annotation_sample.csv
-                     │
-                     ▼
-          outputs/final_labeled.parquet
-          (colonne "label" sur ~1 100 phrases annotées)
-                     │
-                     ▼
-               modelisation
-          (LR + XGBoost, split 70/15/15)
-                     │
-          ┌──────────┴──────────┐
-          ▼                     ▼
-  outputs/models/        outputs/final_predicted.parquet
-  (estimateurs +          (proba_lr, pred_lr,
-   params + métriques)     proba_xgb, pred_xgb)
-                     │
-          ┌──────────┴──────────┐
-          ▼                     ▼
-      dashboard         statistique_resume
-  (visualisation        (performances + résidus
-   par document)         des modèles)
-```
-
-> `embeddings` et `features_engineering` sont **indépendantes** — elles lisent toutes
-> les deux `sentences.parquet` sans dépendance entre elles.
-
-### Lancement de la pipeline complète
-
-```bash
-# Mode 2 classes
-python main.py
-
-# Complet
-python main.py --steps sentences embeddings features_engineering merger label modelise statistique_resume
-
-# Lancement du second dashboard
-streamlit run dashboard.py
-```
-
-Étapes disponibles (dans l'ordre) :
-`index` → `open` → `extract` → `sentences` → `embeddings` → `features_engineering` → `merger` → `label` → `modelise` → `dashboard` → `statistique_resume`
-
----
-
-## Modules en détail
+# Architecture du projet
 
 ### `extract_text.py`
 Indexe la base SQLite puis extrait les transcriptions par dossier Arkindex (identifiés par UUID).
@@ -412,88 +259,91 @@ streamlit run statistique_resume.py
 python main.py --steps statistique_resume
 ```
 
----
+## Démarche
 
-## Annotation manuelle
+### Objectif
 
-### 1. Générer le CSV d'annotation (une seule fois)
+Détecter la présence de "langue de bois" dans des discours de campagne électorale française pour des élections législatives et présidentielles (1981–1993).
 
-```bash
-python sample_annotation.py
+### Approche
+
+Faute de données annotées existantes, la démarche est semi-supervisée :
+
+1. **Représentation des phrases** — deux types de features complémentaires :
+   - *Features linguistiques interprétables* (concrétude, mots vagues, verbes modaux, entités nommées, sentiment) construites à partir de lexiques et de règles, ancrées dans la littérature sur la rhétorique politique
+   - *Embeddings CamemBERT* (768 dims, mean pooling) pour capturer le sens contextuel
+
+2. **Annotation manuelle ciblée** — plutôt que d'annoter les 369 478 phrases, un échantillon
+   de ~1 100 phrases est tiré de façon **stratifiée** (proportionnel à chaque année × type
+   d'élection) sur des **documents complets** (pas de phrases orphelines). Ces annotations
+   constituent la vérité terrain pour entraîner et évaluer un classifieur.
+
+3. **Classification supervisée** — entraînement sur les ~1 100 phrases annotées avec deux modèles
+   complémentaires, puis prédiction sur l'ensemble du corpus (~110 000 phrases).
+
+4. **Visualisation** — deux dashboards Streamlit pour explorer les prédictions et évaluer
+   statistiquement les modèles.
+
+### Deux modes de prétraitement comparables
+
+La pipeline peut être exécutée dans deux modes configurés dans `pipeline/config.py` sous `PROCESSING_MODES` :
+
+| Mode | `--mode` | Classes | Comportement |
+|---|---|---|---|
+| **Filtré** (défaut) | `filtered` | 2 | Lignes admin supprimées avant tokenisation |
+| **Trois classes** | `three_class` | 3 | Rien supprimé — les phrases admin annotées `autre` |
+
+Les outputs sont séparés par un suffixe (`_3class`) pour permettre la comparaison côte à côte :
+
+```
+outputs/sentences.parquet          ←  mode filtered
+outputs/sentences_3class.parquet   ←  mode three_class
+outputs/final_labeled.parquet
+outputs/final_3class_labeled.parquet
 ```
 
-Produit `data/labels/annotation_sample.csv` (~1 100 phrases, documents complets,
-tirage stratifié par année × type d'élection, reproductible via `--seed`).
+L'objectif est de comparer les deux classifieurs en fin de projet : le mode `filtered` ignore le bruit en amont, le mode `three_class` apprend à le reconnaître comme une classe à part entière. Ici, on se focalise sur le mode 2 classes. 
 
-### 2. Annoter
+### Choix techniques notables
 
-Ouvrir `annotation_sample.csv` (Excel, Numbers, VSCode…) et remplir la colonne `label` :
+- **Filtre administratif en cascade** : les en-têtes (nom du candidat, imprimerie, "Sciences Po / CEVIPOF")
+  sont détectés par une cascade de règles (marqueurs explicites, patterns biographiques, absence de verbe
+  conjugué). En mode `filtered` ces lignes sont supprimées ; en mode `three_class` elles sont conservées
+  pour être annotées manuellement comme `autre`.
+- **`filter_ratio` comme feature** : dans les deux modes, on calcule la proportion de lignes détectées
+  comme administratives dans chaque document. Ce ratio est stocké dans `sentences.parquet` et propagé
+  jusqu'à `final.parquet`. Un document avec 70% de lignes "admin" est structurellement différent d'un
+  discours homogène — cette information aide le modèle à pondérer les phrases.
+- **Limite de 110 000 phrases** : volume suffisant pour des statistiques descriptives représentatives,
+  sans exploser les temps de calcul (~30–40 min pour features + embeddings).
+- **CSV comme source de vérité** pour les labels : format simple, versionnable, indépendant de l'ordre
+  de tokenisation — jointure sur `PRIMARY_KEY`. Le labeler valide les valeurs selon le mode.
+- **Double sélection de variables (LR)** : Information Value (IV ≥ 0.02) puis test de Wald (p ≤ 0.05)
+  pour ne conserver que les features statistiquement pertinentes.
+- **Seuil de Bayes calibré** : pour les deux modèles, le seuil de décision est optimisé sur le jeu de
+  validation en minimisant le risque de Bayes (coûts FP/FN égaux → maximise le F1).
 
-| PRIMARY_KEY | doc_id | date | classe | sentence | label |
-|---|---|---|---|---|---|
-| EL136_..._4 | EL136_... | 1981 | legislatives | Nous allons construire... | `langue_de_bois` |
-| EL136_..._5 | EL136_... | 1981 | legislatives | Le budget alloué est... | `non_langue_de_bois` |
-
-Les lignes avec `label` vide sont ignorées — l'annotation peut être partielle et progressive.
-
-### 3. Appliquer les labels
+# Lancement de la pipeline complète
 
 ```bash
-python main.py --steps label
+# Création de l'environnement virtuel
+python -m venv venv
+
+# Activation de l'environnement virtuel
+source venv/bin/activate
+
+# Installation des packages requis
+pip install -r requirements.txt
+
+# spaCy français
+python -m spacy download fr_core_news_md
+
+# Annotation
+python annotate.py
+
+# Pipeline complète
+python main.py --steps sentences embeddings features_engineering merger label modelise statistique_resume
+
+# Lancement du second dashboard
+streamlit run dashboard.py
 ```
-
----
-
-## Schéma des parquets
-
-### `sentences.parquet`
-| Colonne | Type | Description |
-|---|---|---|
-| `doc_id` | str | Nom du fichier source |
-| `PRIMARY_KEY` | str | `{doc_id}_{index}` — clé unique par phrase |
-| `date` | str | Année (`1981`, `1988`, `1993`) |
-| `classe` | str | Type d'élection (`legislatives`, `presidentielle`) |
-| `sentence` | str | Texte de la phrase |
-| `filter_ratio` | float | Proportion de lignes filtrées dans le document source (0 = aucune, 1 = tout) |
-
-### `embeddings.parquet`
-| Colonne | Type | Description |
-|---|---|---|
-| `PRIMARY_KEY` | str | Clé de jointure |
-| `doc_id` | str | Document source |
-| `date` | str | Année |
-| `classe` | str | Type d'élection |
-| `embedding` | list[float32] | Vecteur CamemBERT (768 dims) |
-
-### `features.parquet`
-Toutes les colonnes de `sentences.parquet` + les 17 features linguistiques.
-
-### `final.parquet`
-Toutes les colonnes de `features.parquet` + colonne `embedding`.
-
-### `final_labeled.parquet`
-Toutes les colonnes de `final.parquet` + colonne `label` (`NaN` si non annoté).
-
-### `final_predicted.parquet`
-Toutes les colonnes de `final.parquet` + quatre colonnes de prédiction :
-
-| Colonne | Type | Description |
-|---|---|---|
-| `proba_lr` | float | Probabilité langue_de_bois selon la régression logistique |
-| `pred_lr` | str | Label prédit par LR (seuil de Bayes calibré) |
-| `proba_xgb` | float | Probabilité langue_de_bois selon XGBoost |
-| `pred_xgb` | str | Label prédit par XGBoost (seuil de Bayes calibré) |
-
----
-
-## Configuration (`pipeline/config.py`)
-
-| Paramètre | Valeur | Description |
-|---|---|---|
-| `BERT_MODEL` | `camembert-base` | Modèle d'embedding |
-| `BATCH_SIZE` | `256` | Taille des batchs d'encodage |
-| `MAX_LENGTH` | `128` | Longueur max en tokens |
-| `SPACY_MODEL` | `fr_core_news_md` | Modèle spaCy pour le NER |
-| `SENTIMENT_MODEL` | `cmarkea/distilcamembert-base-sentiment` | Modèle de sentiment |
-| `VAGUE_WORDS` | `vague_words.txt` + `langue_de_bois.txt` | Lexique mots vagues |
-| `MODAL_VERBS` | `modal_verbs.txt` | Lexique verbes modaux |
